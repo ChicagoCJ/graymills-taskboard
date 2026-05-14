@@ -10,7 +10,7 @@ import {
 } from "@dnd-kit/core";
 import { supabase } from "@/lib/supabaseClient";
 
-const APP_REVISION = "Version 3.0 — Major schema cleanup and reliability pass";
+const APP_REVISION = "Version 3.1 — Added bulk archive and cleanup controls";
 
 const statusColumns = [
   {
@@ -491,6 +491,8 @@ function TaskCard({
   onCopyToBlitzit,
   copyingTaskId,
   blitzitReady,
+  isSelected,
+  onToggleSelect,
 }: {
   task: BoardTask;
   columnId: string;
@@ -498,6 +500,8 @@ function TaskCard({
   onCopyToBlitzit: (task: BoardTask) => void;
   copyingTaskId: string | null;
   blitzitReady: boolean;
+  isSelected: boolean;
+  onToggleSelect: (taskId: string) => void;
 }) {
   const dragId = `drag:${columnId}:${task.id}`;
   const cardDropId = `card:${columnId}:${task.id}`;
@@ -550,6 +554,18 @@ function TaskCard({
             : "border-slate-200"
       }`}
     >
+      <div className="mb-2 flex items-center justify-between gap-2">
+        <label className="inline-flex items-center gap-2 text-xs font-semibold text-slate-600">
+          <input
+            type="checkbox"
+            checked={isSelected}
+            onChange={() => onToggleSelect(task.id)}
+            className="h-4 w-4 rounded border-slate-300"
+          />
+          Select
+        </label>
+      </div>
+
       <AssigneeColorBar colors={task.colors} />
 
       <div className="mb-2 flex items-start justify-between gap-3">
@@ -661,6 +677,8 @@ function BoardColumn({
   onCopyToBlitzit,
   copyingTaskId,
   blitzitReady,
+  selectedTaskIds,
+  onToggleTaskSelection,
 }: {
   column: DisplayColumn;
   tasks: BoardTask[];
@@ -668,6 +686,8 @@ function BoardColumn({
   onCopyToBlitzit: (task: BoardTask) => void;
   copyingTaskId: string | null;
   blitzitReady: boolean;
+  selectedTaskIds: string[];
+  onToggleTaskSelection: (taskId: string) => void;
 }) {
   const { isOver, setNodeRef } = useDroppable({
     id: `column:${column.id}`,
@@ -709,6 +729,8 @@ function BoardColumn({
               onCopyToBlitzit={onCopyToBlitzit}
               copyingTaskId={copyingTaskId}
               blitzitReady={blitzitReady}
+              isSelected={selectedTaskIds.includes(task.id)}
+              onToggleSelect={onToggleTaskSelection}
             />
           ))
         )}
@@ -1003,6 +1025,8 @@ export default function Home() {
   const [boardTasks, setBoardTasks] = useState<BoardTask[]>([]);
   const [loadingTasks, setLoadingTasks] = useState(false);
   const [taskMessage, setTaskMessage] = useState("");
+  const [selectedActiveTaskIds, setSelectedActiveTaskIds] = useState<string[]>([]);
+  const [bulkArchivingTasks, setBulkArchivingTasks] = useState(false);
 
   const [projects, setProjects] = useState<ProjectRow[]>([]);
   const [teams, setTeams] = useState<TeamRow[]>([]);
@@ -1020,6 +1044,8 @@ export default function Home() {
   const [deletingArchivedTaskId, setDeletingArchivedTaskId] = useState<
     string | null
   >(null);
+  const [selectedArchivedTaskIds, setSelectedArchivedTaskIds] = useState<string[]>([]);
+  const [bulkArchivedAction, setBulkArchivedAction] = useState<"restore" | "delete" | null>(null);
   const [adminMessage, setAdminMessage] = useState("");
   const [backupMessage, setBackupMessage] = useState("");
   const [exportingBackup, setExportingBackup] = useState(false);
@@ -1452,6 +1478,32 @@ export default function Home() {
       return searchableText.includes(cleanQuery);
     });
   }, [archivedTasks, archivedTaskSearch]);
+
+  const visibleSelectedActiveTaskIds = useMemo(
+    () => selectedActiveTaskIds.filter((taskId) => filteredBoardTasks.some((task) => task.id === taskId)),
+    [selectedActiveTaskIds, filteredBoardTasks],
+  );
+
+  const visibleSelectedArchivedTaskIds = useMemo(
+    () => selectedArchivedTaskIds.filter((taskId) => filteredArchivedTasks.some((task) => task.id === taskId)),
+    [selectedArchivedTaskIds, filteredArchivedTasks],
+  );
+
+  function toggleActiveTaskSelection(taskId: string) {
+    setSelectedActiveTaskIds((currentIds) =>
+      currentIds.includes(taskId)
+        ? currentIds.filter((id) => id !== taskId)
+        : [...currentIds, taskId],
+    );
+  }
+
+  function toggleArchivedTaskSelection(taskId: string) {
+    setSelectedArchivedTaskIds((currentIds) =>
+      currentIds.includes(taskId)
+        ? currentIds.filter((id) => id !== taskId)
+        : [...currentIds, taskId],
+    );
+  }
 
   const reminderNotificationTasks = useMemo(() => {
     if (!inAppNotificationsEnabled || !reminderDueNotificationsEnabled)
@@ -2378,6 +2430,213 @@ export default function Home() {
     }
   }
 
+  async function archiveSelectedActiveTasks() {
+    const taskIdsToArchive = selectedActiveTaskIds.filter((taskId) =>
+      boardTasks.some((task) => task.id === taskId),
+    );
+
+    if (taskIdsToArchive.length === 0) {
+      setTaskMessage("Select one or more tasks to archive.");
+      return;
+    }
+
+    const confirmed = window.confirm(
+      `Archive ${taskIdsToArchive.length} selected task${taskIdsToArchive.length === 1 ? "" : "s"}?\n\nArchived tasks are hidden from the active board but remain available in Admin > Archived Tasks.`,
+    );
+
+    if (!confirmed) return;
+
+    setBulkArchivingTasks(true);
+    setTaskMessage("");
+
+    try {
+      const selectedTasks = boardTasks.filter((task) => taskIdsToArchive.includes(task.id));
+
+      await Promise.all(
+        selectedTasks.map((task) =>
+          logTaskActivity(
+            task.id,
+            "archived",
+            `Archived task by bulk action: ${task.title}.`,
+            { title: task.title, bulk: true },
+          ),
+        ),
+      );
+
+      const { error } = await supabase
+        .from("tasks")
+        .update({ is_archived: true })
+        .in("id", taskIdsToArchive);
+
+      if (error) {
+        setTaskMessage(`Could not archive selected tasks: ${error.message}`);
+        return;
+      }
+
+      setSelectedActiveTaskIds([]);
+      setTaskMessage(`Archived ${taskIdsToArchive.length} selected task${taskIdsToArchive.length === 1 ? "" : "s"}.`);
+      await Promise.all([loadBoardTasks(), loadArchivedTasks()]);
+    } finally {
+      setBulkArchivingTasks(false);
+    }
+  }
+
+  async function restoreSelectedArchivedTasks() {
+    if (!isAdmin) return;
+
+    const taskIdsToRestore = selectedArchivedTaskIds.filter((taskId) =>
+      archivedTasks.some((task) => task.id === taskId),
+    );
+
+    if (taskIdsToRestore.length === 0) {
+      setAdminMessage("Select one or more archived tasks to restore.");
+      return;
+    }
+
+    const confirmed = window.confirm(
+      `Restore ${taskIdsToRestore.length} selected archived task${taskIdsToRestore.length === 1 ? "" : "s"}?`,
+    );
+
+    if (!confirmed) return;
+
+    setBulkArchivedAction("restore");
+    setAdminMessage("");
+
+    try {
+      const tasksToRestore = archivedTasks.filter((task) => taskIdsToRestore.includes(task.id));
+
+      const { error } = await supabase
+        .from("tasks")
+        .update({ is_archived: false })
+        .in("id", taskIdsToRestore);
+
+      if (error) {
+        setAdminMessage(`Could not restore selected tasks: ${error.message}`);
+        return;
+      }
+
+      await Promise.all(
+        tasksToRestore.map((task) =>
+          logTaskActivity(
+            task.id,
+            "restored",
+            `Restored archived task by bulk action: ${task.title}.`,
+            { title: task.title, bulk: true },
+          ),
+        ),
+      );
+
+      setSelectedArchivedTaskIds([]);
+      setAdminMessage(`Restored ${taskIdsToRestore.length} archived task${taskIdsToRestore.length === 1 ? "" : "s"}.`);
+      await Promise.all([loadBoardTasks(), loadArchivedTasks()]);
+    } finally {
+      setBulkArchivedAction(null);
+    }
+  }
+
+  async function permanentlyDeleteSelectedArchivedTasks() {
+    if (!isAdmin) return;
+
+    const taskIdsToDelete = selectedArchivedTaskIds.filter((taskId) =>
+      archivedTasks.some((task) => task.id === taskId),
+    );
+
+    if (taskIdsToDelete.length === 0) {
+      setAdminMessage("Select one or more archived tasks to permanently delete.");
+      return;
+    }
+
+    const firstConfirm = window.confirm(
+      `Permanently delete ${taskIdsToDelete.length} selected archived task${taskIdsToDelete.length === 1 ? "" : "s"}?\n\nThis will delete task records, comments, assignments, tags, activity history, attachment records, stored attachment files, notification dismissals, and custom field values. This cannot be undone.`,
+    );
+
+    if (!firstConfirm) return;
+
+    const typedConfirm = window.prompt(
+      `Type DELETE to permanently delete ${taskIdsToDelete.length} archived task${taskIdsToDelete.length === 1 ? "" : "s"}.`,
+    );
+
+    if (typedConfirm !== "DELETE") {
+      setAdminMessage("Permanent delete canceled. You must type DELETE exactly.");
+      return;
+    }
+
+    setBulkArchivedAction("delete");
+    setAdminMessage("");
+
+    try {
+      const { data: attachments, error: attachmentLoadError } = await supabase
+        .from("task_attachments")
+        .select("id, file_path")
+        .in("task_id", taskIdsToDelete);
+
+      if (attachmentLoadError) {
+        setAdminMessage(
+          `Could not load attachment records before delete: ${attachmentLoadError.message}`,
+        );
+        return;
+      }
+
+      const filePaths = (attachments ?? [])
+        .map((attachment) => attachment.file_path)
+        .filter(Boolean);
+
+      if (filePaths.length > 0) {
+        const { error: storageDeleteError } = await supabase.storage
+          .from("task-attachments")
+          .remove(filePaths);
+
+        if (storageDeleteError) {
+          setAdminMessage(
+            `Could not delete stored attachment files: ${storageDeleteError.message}`,
+          );
+          return;
+        }
+      }
+
+      const cleanupSteps: Array<{ tableName: string; label: string }> = [
+        { tableName: "notification_dismissals", label: "notification dismissals" },
+        { tableName: "task_custom_field_values", label: "custom field values" },
+        { tableName: "task_tags", label: "task tags" },
+        { tableName: "task_assignees", label: "task assignments" },
+        { tableName: "task_comments", label: "comments" },
+        { tableName: "task_attachments", label: "attachment records" },
+        { tableName: "activity_log", label: "activity history" },
+      ];
+
+      for (const step of cleanupSteps) {
+        const { error } = await supabase
+          .from(step.tableName)
+          .delete()
+          .in("task_id", taskIdsToDelete);
+
+        if (error) {
+          setAdminMessage(
+            `Could not delete ${step.label}: ${error.message}. Tasks were not permanently deleted.`,
+          );
+          return;
+        }
+      }
+
+      const { error: taskDeleteError } = await supabase
+        .from("tasks")
+        .delete()
+        .in("id", taskIdsToDelete)
+        .eq("is_archived", true);
+
+      if (taskDeleteError) {
+        setAdminMessage(`Could not permanently delete selected tasks: ${taskDeleteError.message}`);
+        return;
+      }
+
+      setSelectedArchivedTaskIds([]);
+      setAdminMessage(`Permanently deleted ${taskIdsToDelete.length} archived task${taskIdsToDelete.length === 1 ? "" : "s"}.`);
+      await Promise.all([loadBoardTasks(), loadArchivedTasks()]);
+    } finally {
+      setBulkArchivedAction(null);
+    }
+  }
+
   async function restoreArchivedTask(taskId: string) {
     if (!isAdmin) return;
 
@@ -2409,6 +2668,7 @@ export default function Home() {
         { title: taskToRestore?.title ?? null },
       );
 
+      setSelectedArchivedTaskIds((currentIds) => currentIds.filter((id) => id !== taskId));
       setAdminMessage("Archived task restored to the active board.");
       await Promise.all([loadBoardTasks(), loadArchivedTasks()]);
     } finally {
@@ -2504,6 +2764,7 @@ export default function Home() {
         return;
       }
 
+      setSelectedArchivedTaskIds((currentIds) => currentIds.filter((id) => id !== taskId));
       setAdminMessage(
         `Permanently deleted archived task${taskToDelete?.title ? `: ${taskToDelete.title}` : ""}.`,
       );
@@ -3671,6 +3932,7 @@ export default function Home() {
         return;
       }
 
+      setSelectedActiveTaskIds((currentIds) => currentIds.filter((id) => id !== selectedTask.id));
       await loadBoardTasks();
       closeTaskEditor();
       setTaskMessage(
@@ -4760,6 +5022,41 @@ export default function Home() {
               </div>
             )}
 
+            <div className="mb-3 flex flex-col gap-2 rounded-2xl border border-slate-200 bg-white p-3 text-sm text-slate-700 shadow-sm md:flex-row md:items-center md:justify-between">
+              <div>
+                <span className="font-semibold text-slate-950">
+                  Bulk actions:
+                </span>{" "}
+                {visibleSelectedActiveTaskIds.length} selected on this view
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={() => setSelectedActiveTaskIds(filteredBoardTasks.map((task) => task.id))}
+                  disabled={filteredBoardTasks.length === 0}
+                  className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:text-slate-400"
+                >
+                  Select Shown
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSelectedActiveTaskIds([])}
+                  disabled={selectedActiveTaskIds.length === 0}
+                  className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:text-slate-400"
+                >
+                  Clear Selection
+                </button>
+                <button
+                  type="button"
+                  onClick={archiveSelectedActiveTasks}
+                  disabled={selectedActiveTaskIds.length === 0 || bulkArchivingTasks}
+                  className="rounded-xl border border-red-200 bg-white px-3 py-2 text-xs font-semibold text-red-700 hover:bg-red-50 disabled:cursor-not-allowed disabled:text-red-300"
+                >
+                  {bulkArchivingTasks ? "Archiving..." : "Archive Selected"}
+                </button>
+              </div>
+            </div>
+
             <DndContext onDragEnd={handleDragEnd}>
               <div className="overflow-x-auto pb-4">
                 <div className="flex min-w-max gap-4">
@@ -4777,6 +5074,8 @@ export default function Home() {
                         onCopyToBlitzit={copyTaskToBlitzit}
                         copyingTaskId={copyingTaskId}
                         blitzitReady={blitzitReady}
+                        selectedTaskIds={selectedActiveTaskIds}
+                        onToggleTaskSelection={toggleActiveTaskSelection}
                       />
                     );
                   })}
@@ -5784,20 +6083,59 @@ export default function Home() {
                 </div>
 
                 <div className="mt-4 rounded-2xl border border-slate-200 bg-white p-4">
-                  <div className="mb-3 flex items-center justify-between gap-3">
-                    <p className="text-sm font-semibold text-slate-950">
-                      {filteredArchivedTasks.length} archived task
-                      {filteredArchivedTasks.length === 1 ? "" : "s"}
-                    </p>
-                    {archivedTaskSearch && (
+                  <div className="mb-3 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                    <div>
+                      <p className="text-sm font-semibold text-slate-950">
+                        {filteredArchivedTasks.length} archived task
+                        {filteredArchivedTasks.length === 1 ? "" : "s"}
+                      </p>
+                      <p className="mt-1 text-xs text-slate-500">
+                        {visibleSelectedArchivedTaskIds.length} selected on this archived-task view
+                      </p>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {archivedTaskSearch && (
+                        <button
+                          type="button"
+                          onClick={() => setArchivedTaskSearch("")}
+                          className="rounded-lg border border-slate-200 px-2 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                        >
+                          Clear Search
+                        </button>
+                      )}
                       <button
                         type="button"
-                        onClick={() => setArchivedTaskSearch("")}
-                        className="rounded-lg border border-slate-200 px-2 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                        onClick={() => setSelectedArchivedTaskIds(filteredArchivedTasks.map((task) => task.id))}
+                        disabled={filteredArchivedTasks.length === 0}
+                        className="rounded-lg border border-slate-200 px-2 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:text-slate-400"
                       >
-                        Clear Search
+                        Select Shown
                       </button>
-                    )}
+                      <button
+                        type="button"
+                        onClick={() => setSelectedArchivedTaskIds([])}
+                        disabled={selectedArchivedTaskIds.length === 0}
+                        className="rounded-lg border border-slate-200 px-2 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:text-slate-400"
+                      >
+                        Clear Selection
+                      </button>
+                      <button
+                        type="button"
+                        onClick={restoreSelectedArchivedTasks}
+                        disabled={selectedArchivedTaskIds.length === 0 || bulkArchivedAction !== null}
+                        className="rounded-lg border border-green-200 bg-white px-2 py-1 text-xs font-semibold text-green-700 hover:bg-green-50 disabled:cursor-not-allowed disabled:text-green-300"
+                      >
+                        {bulkArchivedAction === "restore" ? "Restoring..." : "Restore Selected"}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={permanentlyDeleteSelectedArchivedTasks}
+                        disabled={selectedArchivedTaskIds.length === 0 || bulkArchivedAction !== null}
+                        className="rounded-lg border border-red-200 bg-white px-2 py-1 text-xs font-semibold text-red-700 hover:bg-red-50 disabled:cursor-not-allowed disabled:text-red-300"
+                      >
+                        {bulkArchivedAction === "delete" ? "Deleting..." : "Delete Selected Forever"}
+                      </button>
+                    </div>
                   </div>
 
                   {filteredArchivedTasks.length === 0 ? (
@@ -5815,6 +6153,15 @@ export default function Home() {
                         >
                           <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
                             <div className="min-w-0">
+                              <label className="mb-2 inline-flex items-center gap-2 text-xs font-semibold text-slate-600">
+                                <input
+                                  type="checkbox"
+                                  checked={selectedArchivedTaskIds.includes(task.id)}
+                                  onChange={() => toggleArchivedTaskSelection(task.id)}
+                                  className="h-4 w-4 rounded border-slate-300"
+                                />
+                                Select
+                              </label>
                               <p className="font-semibold text-slate-950">
                                 {task.title}
                               </p>
