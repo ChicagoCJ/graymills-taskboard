@@ -10,24 +10,56 @@ import {
 } from "@dnd-kit/core";
 import { supabase } from "@/lib/supabaseClient";
 
-const APP_REVISION = "Version 2.3 — Added in-app help and training guide";
+const APP_REVISION = "Version 2.4 — Added dashboard and reporting view";
 
 const statusColumns = [
-  { id: "backlog", name: "Backlog", description: "Ideas, requests, and tasks not ready to start." },
+  {
+    id: "backlog",
+    name: "Backlog",
+    description: "Ideas, requests, and tasks not ready to start.",
+  },
   { id: "todo", name: "To Do", description: "Ready to be worked on." },
-  { id: "in_progress", name: "In Progress", description: "Currently active work." },
-  { id: "waiting", name: "Waiting", description: "Blocked by another person, vendor, or decision." },
-  { id: "review", name: "Review", description: "Ready for approval or final check." },
+  {
+    id: "in_progress",
+    name: "In Progress",
+    description: "Currently active work.",
+  },
+  {
+    id: "waiting",
+    name: "Waiting",
+    description: "Blocked by another person, vendor, or decision.",
+  },
+  {
+    id: "review",
+    name: "Review",
+    description: "Ready for approval or final check.",
+  },
   { id: "done", name: "Done", description: "Completed work." },
 ];
 
 const calendarColumns = [
-  { id: "overdue", name: "Overdue", description: "Tasks with due dates before today." },
+  {
+    id: "overdue",
+    name: "Overdue",
+    description: "Tasks with due dates before today.",
+  },
   { id: "today", name: "Today", description: "Tasks due today." },
   { id: "tomorrow", name: "Tomorrow", description: "Tasks due tomorrow." },
-  { id: "next7", name: "Next 7 Days", description: "Tasks due in the next week." },
-  { id: "later", name: "Later", description: "Tasks due more than a week from now." },
-  { id: "no-date", name: "No Due Date", description: "Tasks with no due date assigned." },
+  {
+    id: "next7",
+    name: "Next 7 Days",
+    description: "Tasks due in the next week.",
+  },
+  {
+    id: "later",
+    name: "Later",
+    description: "Tasks due more than a week from now.",
+  },
+  {
+    id: "no-date",
+    name: "No Due Date",
+    description: "Tasks with no due date assigned.",
+  },
 ];
 
 const smartFilterOptions = [
@@ -225,7 +257,11 @@ function formatReminderDate(dateValue: string | null) {
   if (!dateValue) return "No reminder";
   const date = new Date(dateValue);
   if (Number.isNaN(date.getTime())) return "No reminder";
-  return date.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
+  return date.toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
 }
 
 function toReminderDateInput(dateValue: string | null) {
@@ -298,7 +334,9 @@ function getCalendarColumnId(dateValue: string | null) {
   const dueDate = new Date(`${dateValue}T00:00:00`);
   dueDate.setHours(0, 0, 0, 0);
 
-  const daysFromToday = Math.round((dueDate.getTime() - today.getTime()) / 86400000);
+  const daysFromToday = Math.round(
+    (dueDate.getTime() - today.getTime()) / 86400000,
+  );
 
   if (daysFromToday < 0) return "overdue";
   if (daysFromToday === 0) return "today";
@@ -343,13 +381,15 @@ function PriorityBadge({ priority }: { priority: string }) {
     priority === "urgent"
       ? "bg-red-100 text-red-800 border-red-200"
       : priority === "high"
-      ? "bg-orange-100 text-orange-800 border-orange-200"
-      : priority === "low"
-      ? "bg-slate-50 text-slate-500 border-slate-200"
-      : "bg-slate-100 text-slate-700 border-slate-200";
+        ? "bg-orange-100 text-orange-800 border-orange-200"
+        : priority === "low"
+          ? "bg-slate-50 text-slate-500 border-slate-200"
+          : "bg-slate-100 text-slate-700 border-slate-200";
 
   return (
-    <span className={`rounded-full border px-2 py-1 text-xs font-medium ${style}`}>
+    <span
+      className={`rounded-full border px-2 py-1 text-xs font-medium ${style}`}
+    >
       {formatPriority(priority)}
     </span>
   );
@@ -364,7 +404,10 @@ function AssigneeColorBar({ colors }: { colors: string[] }) {
         <div
           key={`${color}-${index}`}
           className="h-full"
-          style={{ width: `${100 / safeColors.length}%`, backgroundColor: color }}
+          style={{
+            width: `${100 / safeColors.length}%`,
+            backgroundColor: color,
+          }}
         />
       ))}
     </div>
@@ -430,7 +473,11 @@ function TaskCard({
       ref={setCombinedNodeRef}
       style={style}
       className={`rounded-2xl border bg-white p-3 shadow-sm transition hover:shadow-md ${
-        isDragging ? "border-blue-300 opacity-70 shadow-xl" : isOver ? "border-blue-300" : "border-slate-200"
+        isDragging
+          ? "border-blue-300 opacity-70 shadow-xl"
+          : isOver
+            ? "border-blue-300"
+            : "border-slate-200"
       }`}
     >
       <AssigneeColorBar colors={task.colors} />
@@ -443,12 +490,30 @@ function TaskCard({
       </div>
 
       <div className="space-y-0.5 text-xs text-slate-600">
-        <p><span className="font-semibold text-slate-800">Project:</span> {task.project}</p>
-        <p><span className="font-semibold text-slate-800">Assigned:</span> {task.assignees.length > 0 ? task.assignees.join(", ") : "Unassigned"}</p>
-        <p><span className="font-semibold text-slate-800">Team:</span> {task.team}</p>
-        <p><span className="font-semibold text-slate-800">Status:</span> {statusColumns.find((column) => column.id === task.status)?.name || task.status}</p>
-        <p><span className="font-semibold text-slate-800">Due:</span> {task.due}</p>
-        <p><span className="font-semibold text-slate-800">Reminder:</span> {formatReminderDate(task.reminderAt)}</p>
+        <p>
+          <span className="font-semibold text-slate-800">Project:</span>{" "}
+          {task.project}
+        </p>
+        <p>
+          <span className="font-semibold text-slate-800">Assigned:</span>{" "}
+          {task.assignees.length > 0 ? task.assignees.join(", ") : "Unassigned"}
+        </p>
+        <p>
+          <span className="font-semibold text-slate-800">Team:</span>{" "}
+          {task.team}
+        </p>
+        <p>
+          <span className="font-semibold text-slate-800">Status:</span>{" "}
+          {statusColumns.find((column) => column.id === task.status)?.name ||
+            task.status}
+        </p>
+        <p>
+          <span className="font-semibold text-slate-800">Due:</span> {task.due}
+        </p>
+        <p>
+          <span className="font-semibold text-slate-800">Reminder:</span>{" "}
+          {formatReminderDate(task.reminderAt)}
+        </p>
         <p>
           <span className="font-semibold text-slate-800">Blitzit:</span>{" "}
           {task.blitzitCopiedAt ? "Copied" : "Not copied"}
@@ -463,7 +528,10 @@ function TaskCard({
 
       <div className="mt-2 flex flex-wrap gap-1.5">
         {task.tags.map((tag) => (
-          <span key={tag} className="rounded-full bg-slate-100 px-2 py-1 text-xs text-slate-700">
+          <span
+            key={tag}
+            className="rounded-full bg-slate-100 px-2 py-1 text-xs text-slate-700"
+          >
             #{tag}
           </span>
         ))}
@@ -490,9 +558,17 @@ function TaskCard({
             onClick={() => onCopyToBlitzit(task)}
             disabled={!blitzitReady || copyingTaskId === task.id}
             className="rounded-lg border border-slate-200 px-2 py-1 text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
-            title={blitzitReady ? "Copy this task to Blitzit" : "Save your Blitzit webhook settings first"}
+            title={
+              blitzitReady
+                ? "Copy this task to Blitzit"
+                : "Save your Blitzit webhook settings first"
+            }
           >
-            {copyingTaskId === task.id ? "Copying..." : task.blitzitCopiedAt ? "Re-copy" : "Copy"}
+            {copyingTaskId === task.id
+              ? "Copying..."
+              : task.blitzitCopiedAt
+                ? "Re-copy"
+                : "Copy"}
           </button>
 
           <button
@@ -586,7 +662,10 @@ function friendlyAuthErrorMessage(message: string) {
     return "This email has not been confirmed yet. Check the inbox for a confirmation email, or ask an admin to confirm the user in Supabase.";
   }
 
-  if (lower.includes("requested path is invalid") || lower.includes("redirect")) {
+  if (
+    lower.includes("requested path is invalid") ||
+    lower.includes("redirect")
+  ) {
     return "The password reset link could not open the correct page. Confirm the Supabase Site URL and Redirect URLs include this app URL and /update-password.";
   }
 
@@ -634,7 +713,7 @@ function LoginScreen() {
 
         setResetEmailSent(true);
         setMessage(
-          `Password reset email sent. Check your inbox and use the reset link. The link should open ${redirectTo}. Do not click Send Reset Email again unless you need a new link.`
+          `Password reset email sent. Check your inbox and use the reset link. The link should open ${redirectTo}. Do not click Send Reset Email again unless you need a new link.`,
         );
         return;
       }
@@ -656,9 +735,14 @@ function LoginScreen() {
           return;
         }
 
-        setMessage("Signup submitted. If email confirmation is enabled, check your email before signing in. New users may need an admin to assign role/color settings.");
+        setMessage(
+          "Signup submitted. If email confirmation is enabled, check your email before signing in. New users may need an admin to assign role/color settings.",
+        );
       } else {
-        const { error } = await supabase.auth.signInWithPassword({ email, password });
+        const { error } = await supabase.auth.signInWithPassword({
+          email,
+          password,
+        });
 
         if (error) {
           setMessage(friendlyAuthErrorMessage(error.message));
@@ -700,7 +784,9 @@ function LoginScreen() {
             type="button"
             onClick={() => switchMode("sign-in")}
             className={`rounded-lg px-3 py-2 text-sm font-semibold ${
-              mode === "sign-in" ? "bg-white text-slate-950 shadow-sm" : "text-slate-600"
+              mode === "sign-in"
+                ? "bg-white text-slate-950 shadow-sm"
+                : "text-slate-600"
             }`}
           >
             Sign In
@@ -709,7 +795,9 @@ function LoginScreen() {
             type="button"
             onClick={() => switchMode("sign-up")}
             className={`rounded-lg px-3 py-2 text-sm font-semibold ${
-              mode === "sign-up" ? "bg-white text-slate-950 shadow-sm" : "text-slate-600"
+              mode === "sign-up"
+                ? "bg-white text-slate-950 shadow-sm"
+                : "text-slate-600"
             }`}
           >
             Sign Up
@@ -718,7 +806,9 @@ function LoginScreen() {
             type="button"
             onClick={() => switchMode("reset")}
             className={`rounded-lg px-3 py-2 text-sm font-semibold ${
-              mode === "reset" ? "bg-white text-slate-950 shadow-sm" : "text-slate-600"
+              mode === "reset"
+                ? "bg-white text-slate-950 shadow-sm"
+                : "text-slate-600"
             }`}
           >
             Reset
@@ -728,7 +818,9 @@ function LoginScreen() {
         <form onSubmit={handleAuth} className="mt-5 space-y-4">
           {mode === "sign-up" && (
             <div>
-              <label className="text-sm font-semibold text-slate-900">Full name</label>
+              <label className="text-sm font-semibold text-slate-900">
+                Full name
+              </label>
               <input
                 className="mt-1 w-full rounded-xl border border-slate-300 px-4 py-3 text-sm outline-none focus:border-slate-500"
                 value={fullName}
@@ -739,7 +831,9 @@ function LoginScreen() {
           )}
 
           <div>
-            <label className="text-sm font-semibold text-slate-900">Email</label>
+            <label className="text-sm font-semibold text-slate-900">
+              Email
+            </label>
             <input
               className="mt-1 w-full rounded-xl border border-slate-300 px-4 py-3 text-sm outline-none focus:border-slate-500"
               type="email"
@@ -751,7 +845,9 @@ function LoginScreen() {
 
           {mode !== "reset" && (
             <div>
-              <label className="text-sm font-semibold text-slate-900">Password</label>
+              <label className="text-sm font-semibold text-slate-900">
+                Password
+              </label>
               <input
                 className="mt-1 w-full rounded-xl border border-slate-300 px-4 py-3 text-sm outline-none focus:border-slate-500"
                 type="password"
@@ -770,12 +866,12 @@ function LoginScreen() {
             {busy
               ? "Working..."
               : mode === "sign-up"
-              ? "Create Account"
-              : mode === "reset"
-              ? resetEmailSent
-                ? "Reset Email Sent"
-                : "Send Reset Email"
-              : "Sign In"}
+                ? "Create Account"
+                : mode === "reset"
+                  ? resetEmailSent
+                    ? "Reset Email Sent"
+                    : "Send Reset Email"
+                  : "Sign In"}
           </button>
         </form>
 
@@ -783,7 +879,9 @@ function LoginScreen() {
           <div className="mt-4 rounded-xl border border-blue-200 bg-blue-50 p-3 text-xs leading-relaxed text-blue-950">
             <p className="font-semibold">Password reset tips</p>
             <p className="mt-1">
-              Use the newest reset email only. Repeated requests can trigger Supabase email rate limits. If that happens, wait before trying again or ask an admin to reset your password in Supabase.
+              Use the newest reset email only. Repeated requests can trigger
+              Supabase email rate limits. If that happens, wait before trying
+              again or ask an admin to reset your password in Supabase.
             </p>
             {resetEmailSent && (
               <button
@@ -827,7 +925,8 @@ export default function Home() {
   const [profileMessage, setProfileMessage] = useState("");
 
   const [boardView, setBoardView] = useState<BoardView>("status");
-  const [activeSmartFilter, setActiveSmartFilter] = useState<SmartFilterId>("all");
+  const [activeSmartFilter, setActiveSmartFilter] =
+    useState<SmartFilterId>("all");
   const [taskSearchQuery, setTaskSearchQuery] = useState("");
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [adminOpen, setAdminOpen] = useState(false);
@@ -846,13 +945,21 @@ export default function Home() {
   const [backupMessage, setBackupMessage] = useState("");
   const [exportingBackup, setExportingBackup] = useState(false);
   const [restoreFileName, setRestoreFileName] = useState("");
-  const [restorePreview, setRestorePreview] = useState<Record<string, number> | null>(null);
-  const [restoreBackupData, setRestoreBackupData] = useState<Record<string, unknown[]> | null>(null);
+  const [restorePreview, setRestorePreview] = useState<Record<
+    string,
+    number
+  > | null>(null);
+  const [restoreBackupData, setRestoreBackupData] = useState<Record<
+    string,
+    unknown[]
+  > | null>(null);
   const [restoringBackup, setRestoringBackup] = useState(false);
 
   const [editingUserId, setEditingUserId] = useState("");
   const [editUserFullName, setEditUserFullName] = useState("");
-  const [editUserRole, setEditUserRole] = useState<"admin" | "member">("member");
+  const [editUserRole, setEditUserRole] = useState<"admin" | "member">(
+    "member",
+  );
   const [editUserColor, setEditUserColor] = useState("#2563EB");
 
   const [newProjectName, setNewProjectName] = useState("");
@@ -899,7 +1006,8 @@ export default function Home() {
   const [editMessage, setEditMessage] = useState("");
 
   const [attachments, setAttachments] = useState<TaskAttachmentRow[]>([]);
-  const [selectedAttachmentFile, setSelectedAttachmentFile] = useState<File | null>(null);
+  const [selectedAttachmentFile, setSelectedAttachmentFile] =
+    useState<File | null>(null);
   const [uploadingFile, setUploadingFile] = useState(false);
   const [attachmentMessage, setAttachmentMessage] = useState("");
 
@@ -919,13 +1027,21 @@ export default function Home() {
 
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
-  const [inAppNotificationsEnabled, setInAppNotificationsEnabled] = useState(true);
-  const [emailNotificationsEnabled, setEmailNotificationsEnabled] = useState(false);
-  const [reminderDueNotificationsEnabled, setReminderDueNotificationsEnabled] = useState(true);
-  const [includeOverdueNotifications, setIncludeOverdueNotifications] = useState(true);
-  const [dismissedNotificationTaskIds, setDismissedNotificationTaskIds] = useState<string[]>([]);
-  const [showDismissedNotifications, setShowDismissedNotifications] = useState(false);
-  const [savingNotificationSettings, setSavingNotificationSettings] = useState(false);
+  const [dashboardOpen, setDashboardOpen] = useState(false);
+  const [inAppNotificationsEnabled, setInAppNotificationsEnabled] =
+    useState(true);
+  const [emailNotificationsEnabled, setEmailNotificationsEnabled] =
+    useState(false);
+  const [reminderDueNotificationsEnabled, setReminderDueNotificationsEnabled] =
+    useState(true);
+  const [includeOverdueNotifications, setIncludeOverdueNotifications] =
+    useState(true);
+  const [dismissedNotificationTaskIds, setDismissedNotificationTaskIds] =
+    useState<string[]>([]);
+  const [showDismissedNotifications, setShowDismissedNotifications] =
+    useState(false);
+  const [savingNotificationSettings, setSavingNotificationSettings] =
+    useState(false);
   const [notificationMessage, setNotificationMessage] = useState("");
 
   const accountInactive = profile?.is_active === false;
@@ -943,7 +1059,9 @@ export default function Home() {
     return profile.role === "admin" ? "Admin" : "Member";
   }, [profile]);
 
-  const blitzitReady = Boolean(blitzitWebhookUrl.trim() && blitzitSigningSecret.trim());
+  const blitzitReady = Boolean(
+    blitzitWebhookUrl.trim() && blitzitSigningSecret.trim(),
+  );
 
   const currentBoardColumns = useMemo<DisplayColumn[]>(() => {
     if (boardView === "status") return statusColumns;
@@ -957,7 +1075,11 @@ export default function Home() {
           name: displayProfileName(profileRow),
           description: "Tasks assigned to this person.",
         })),
-        { id: "unassigned-person", name: "No Person", description: "Tasks with no assigned person." },
+        {
+          id: "unassigned-person",
+          name: "No Person",
+          description: "Tasks with no assigned person.",
+        },
       ];
     }
 
@@ -968,7 +1090,11 @@ export default function Home() {
           name: team.name,
           description: "Tasks assigned to this team.",
         })),
-        { id: "unassigned-team", name: "No Team", description: "Tasks with no assigned team." },
+        {
+          id: "unassigned-team",
+          name: "No Team",
+          description: "Tasks with no assigned team.",
+        },
       ];
     }
 
@@ -978,16 +1104,28 @@ export default function Home() {
         name: project.name,
         description: "Tasks assigned to this project.",
       })),
-      { id: "no-project", name: "No Project", description: "Tasks with no project selected." },
+      {
+        id: "no-project",
+        name: "No Project",
+        description: "Tasks with no project selected.",
+      },
     ];
   }, [boardView, profiles, teams, projects]);
 
   function getDefaultProjectId(projectRows: ProjectRow[]) {
-    return projectRows.find((project) => project.name === "TaskBoard Setup")?.id || projectRows[0]?.id || "";
+    return (
+      projectRows.find((project) => project.name === "TaskBoard Setup")?.id ||
+      projectRows[0]?.id ||
+      ""
+    );
   }
 
   function getDefaultTeamId(teamRows: TeamRow[]) {
-    return teamRows.find((team) => team.name === "Marketing")?.id || teamRows[0]?.id || "";
+    return (
+      teamRows.find((team) => team.name === "Marketing")?.id ||
+      teamRows[0]?.id ||
+      ""
+    );
   }
 
   function buildAssignmentType(profileId: string, teamId: string) {
@@ -1002,24 +1140,32 @@ export default function Home() {
 
   function describeProject(projectId: string | null) {
     if (!projectId) return "No project";
-    return projects.find((project) => project.id === projectId)?.name || "Project";
+    return (
+      projects.find((project) => project.id === projectId)?.name || "Project"
+    );
   }
 
   function describeProfiles(profileIds: string[]) {
     if (profileIds.length === 0) return "No people";
-    return profileIds
-      .map((profileId) => profiles.find((profileRow) => profileRow.id === profileId))
-      .filter(Boolean)
-      .map((profileRow) => displayProfileName(profileRow as ProfileRow))
-      .join(", ") || "No people";
+    return (
+      profileIds
+        .map((profileId) =>
+          profiles.find((profileRow) => profileRow.id === profileId),
+        )
+        .filter(Boolean)
+        .map((profileRow) => displayProfileName(profileRow as ProfileRow))
+        .join(", ") || "No people"
+    );
   }
 
   function describeTeams(teamIds: string[]) {
     if (teamIds.length === 0) return "No teams";
-    return teamIds
-      .map((teamId) => teams.find((team) => team.id === teamId)?.name)
-      .filter(Boolean)
-      .join(", ") || "No teams";
+    return (
+      teamIds
+        .map((teamId) => teams.find((team) => team.id === teamId)?.name)
+        .filter(Boolean)
+        .join(", ") || "No teams"
+    );
   }
 
   function arraysAreSame(left: string[], right: string[]) {
@@ -1032,17 +1178,41 @@ export default function Home() {
     const changes: string[] = [];
 
     if (task.title !== editTitle.trim()) changes.push("title");
-    if ((task.description ?? "") !== editDescription.trim()) changes.push("notes");
-    if (task.priority !== editPriority) changes.push(`priority from ${formatPriority(task.priority)} to ${formatPriority(editPriority)}`);
-    if (task.status !== editStatus) changes.push(`status from ${describeStatus(task.status)} to ${describeStatus(editStatus)}`);
-    if ((task.dueRaw ?? "") !== editDueDate) changes.push(`due date from ${task.dueRaw || "none"} to ${editDueDate || "none"}`);
-    if (toReminderDateInput(task.reminderAt) !== editReminderAt) changes.push(`reminder from ${formatReminderDate(task.reminderAt)} to ${editReminderAt || "none"}`);
-    if ((task.reminderNote ?? "") !== editReminderNote.trim()) changes.push("reminder note");
-    if ((task.projectId ?? "") !== editProjectId) changes.push(`project from ${task.project} to ${describeProject(editProjectId || null)}`);
-    if (!arraysAreSame(task.assignedProfileIds, editProfileIds)) changes.push(`people from ${describeProfiles(task.assignedProfileIds)} to ${describeProfiles(editProfileIds)}`);
-    if (!arraysAreSame(task.assignedTeamIds, editTeamIds)) changes.push(`teams from ${describeTeams(task.assignedTeamIds)} to ${describeTeams(editTeamIds)}`);
+    if ((task.description ?? "") !== editDescription.trim())
+      changes.push("notes");
+    if (task.priority !== editPriority)
+      changes.push(
+        `priority from ${formatPriority(task.priority)} to ${formatPriority(editPriority)}`,
+      );
+    if (task.status !== editStatus)
+      changes.push(
+        `status from ${describeStatus(task.status)} to ${describeStatus(editStatus)}`,
+      );
+    if ((task.dueRaw ?? "") !== editDueDate)
+      changes.push(
+        `due date from ${task.dueRaw || "none"} to ${editDueDate || "none"}`,
+      );
+    if (toReminderDateInput(task.reminderAt) !== editReminderAt)
+      changes.push(
+        `reminder from ${formatReminderDate(task.reminderAt)} to ${editReminderAt || "none"}`,
+      );
+    if ((task.reminderNote ?? "") !== editReminderNote.trim())
+      changes.push("reminder note");
+    if ((task.projectId ?? "") !== editProjectId)
+      changes.push(
+        `project from ${task.project} to ${describeProject(editProjectId || null)}`,
+      );
+    if (!arraysAreSame(task.assignedProfileIds, editProfileIds))
+      changes.push(
+        `people from ${describeProfiles(task.assignedProfileIds)} to ${describeProfiles(editProfileIds)}`,
+      );
+    if (!arraysAreSame(task.assignedTeamIds, editTeamIds))
+      changes.push(
+        `teams from ${describeTeams(task.assignedTeamIds)} to ${describeTeams(editTeamIds)}`,
+      );
 
-    if (changes.length === 0) return "Task saved with no tracked field changes.";
+    if (changes.length === 0)
+      return "Task saved with no tracked field changes.";
     return `Updated task: ${changes.join("; ")}.`;
   }
 
@@ -1067,7 +1237,9 @@ export default function Home() {
         return task.assignedProfileIds.length === 0;
       }
       if (columnId.startsWith("person:")) {
-        return task.assignedProfileIds.includes(columnId.replace("person:", ""));
+        return task.assignedProfileIds.includes(
+          columnId.replace("person:", ""),
+        );
       }
       return false;
     }
@@ -1087,8 +1259,8 @@ export default function Home() {
 
   function getSmartFilterLabel(filterId: SmartFilterId) {
     return (
-      smartFilterOptions.find((filterOption) => filterOption.id === filterId)?.label ||
-      "All Tasks"
+      smartFilterOptions.find((filterOption) => filterOption.id === filterId)
+        ?.label || "All Tasks"
     );
   }
 
@@ -1101,7 +1273,9 @@ export default function Home() {
     const dueDate = new Date(`${dateValue}T00:00:00`);
     dueDate.setHours(0, 0, 0, 0);
 
-    const daysFromToday = Math.round((dueDate.getTime() - today.getTime()) / 86400000);
+    const daysFromToday = Math.round(
+      (dueDate.getTime() - today.getTime()) / 86400000,
+    );
     return daysFromToday >= 0 && daysFromToday <= 7;
   }
 
@@ -1109,21 +1283,32 @@ export default function Home() {
     if (activeSmartFilter === "all") return true;
 
     if (activeSmartFilter === "my") {
-      return Boolean(session?.user.id && task.assignedProfileIds.includes(session.user.id));
+      return Boolean(
+        session?.user.id && task.assignedProfileIds.includes(session.user.id),
+      );
     }
 
-    if (activeSmartFilter === "due-today") return getCalendarColumnId(task.dueRaw) === "today";
-    if (activeSmartFilter === "due-week") return isDateWithinNextSevenDays(task.dueRaw);
-    if (activeSmartFilter === "overdue") return getCalendarColumnId(task.dueRaw) === "overdue";
-    if (activeSmartFilter === "high") return task.priority === "high" || task.priority === "urgent";
+    if (activeSmartFilter === "due-today")
+      return getCalendarColumnId(task.dueRaw) === "today";
+    if (activeSmartFilter === "due-week")
+      return isDateWithinNextSevenDays(task.dueRaw);
+    if (activeSmartFilter === "overdue")
+      return getCalendarColumnId(task.dueRaw) === "overdue";
+    if (activeSmartFilter === "high")
+      return task.priority === "high" || task.priority === "urgent";
     if (activeSmartFilter === "waiting") return task.status === "waiting";
     if (activeSmartFilter === "review") return task.status === "review";
-    if (activeSmartFilter === "no-assignee") return task.assignedProfileIds.length === 0 && task.assignedTeamIds.length === 0;
+    if (activeSmartFilter === "no-assignee")
+      return (
+        task.assignedProfileIds.length === 0 &&
+        task.assignedTeamIds.length === 0
+      );
     if (activeSmartFilter === "not-copied") return !task.blitzitCopiedAt;
     if (activeSmartFilter === "has-files") return task.attachmentCount > 0;
     if (activeSmartFilter === "no-due-date") return !task.dueRaw;
     if (activeSmartFilter === "has-reminder") return Boolean(task.reminderAt);
-    if (activeSmartFilter === "reminder-due") return reminderIsDue(task.reminderAt);
+    if (activeSmartFilter === "reminder-due")
+      return reminderIsDue(task.reminderAt);
 
     return true;
   }
@@ -1156,20 +1341,24 @@ export default function Home() {
   const filteredBoardTasks = useMemo(
     () =>
       boardTasks.filter(
-        (task) => taskMatchesSmartFilter(task) && taskMatchesSearchQuery(task)
+        (task) => taskMatchesSmartFilter(task) && taskMatchesSearchQuery(task),
       ),
-    [boardTasks, activeSmartFilter, taskSearchQuery, session?.user.id]
+    [boardTasks, activeSmartFilter, taskSearchQuery, session?.user.id],
   );
 
-
   const reminderNotificationTasks = useMemo(() => {
-    if (!inAppNotificationsEnabled || !reminderDueNotificationsEnabled) return [];
+    if (!inAppNotificationsEnabled || !reminderDueNotificationsEnabled)
+      return [];
 
     return boardTasks
       .filter((task) => {
         if (!task.reminderAt) return false;
         if (task.status === "done") return false;
-        if (dismissedNotificationTaskIds.includes(task.id) && !showDismissedNotifications) return false;
+        if (
+          dismissedNotificationTaskIds.includes(task.id) &&
+          !showDismissedNotifications
+        )
+          return false;
         if (includeOverdueNotifications) return reminderIsDue(task.reminderAt);
         return reminderIsToday(task.reminderAt);
       })
@@ -1178,10 +1367,18 @@ export default function Home() {
         const bDate = toReminderDateInput(b.reminderAt);
         return aDate.localeCompare(bDate) || a.title.localeCompare(b.title);
       });
-  }, [boardTasks, inAppNotificationsEnabled, reminderDueNotificationsEnabled, includeOverdueNotifications, dismissedNotificationTaskIds, showDismissedNotifications]);
+  }, [
+    boardTasks,
+    inAppNotificationsEnabled,
+    reminderDueNotificationsEnabled,
+    includeOverdueNotifications,
+    dismissedNotificationTaskIds,
+    showDismissedNotifications,
+  ]);
 
   const activeNotificationCount = useMemo(() => {
-    if (!inAppNotificationsEnabled || !reminderDueNotificationsEnabled) return 0;
+    if (!inAppNotificationsEnabled || !reminderDueNotificationsEnabled)
+      return 0;
 
     return boardTasks.filter((task) => {
       if (!task.reminderAt) return false;
@@ -1190,7 +1387,120 @@ export default function Home() {
       if (includeOverdueNotifications) return reminderIsDue(task.reminderAt);
       return reminderIsToday(task.reminderAt);
     }).length;
-  }, [boardTasks, inAppNotificationsEnabled, reminderDueNotificationsEnabled, includeOverdueNotifications, dismissedNotificationTaskIds]);
+  }, [
+    boardTasks,
+    inAppNotificationsEnabled,
+    reminderDueNotificationsEnabled,
+    includeOverdueNotifications,
+    dismissedNotificationTaskIds,
+  ]);
+
+  const dashboardStats = useMemo(() => {
+    const openTasks = boardTasks.filter(
+      (task) => task.status !== "done" && task.status !== "canceled",
+    );
+    const completedTasks = boardTasks.filter((task) => task.status === "done");
+    const overdueTasks = openTasks.filter(
+      (task) => getCalendarColumnId(task.dueRaw) === "overdue",
+    );
+    const dueThisWeekTasks = openTasks.filter((task) =>
+      isDateWithinNextSevenDays(task.dueRaw),
+    );
+    const highPriorityTasks = openTasks.filter(
+      (task) => task.priority === "high" || task.priority === "urgent",
+    );
+    const waitingTasks = openTasks.filter((task) => task.status === "waiting");
+    const reviewTasks = openTasks.filter((task) => task.status === "review");
+    const reminderDueTasks = openTasks.filter((task) =>
+      reminderIsDue(task.reminderAt),
+    );
+    const notCopiedToBlitzitTasks = openTasks.filter(
+      (task) => !task.blitzitCopiedAt,
+    );
+
+    const countByStatus = statusColumns.map((column) => ({
+      label: column.name,
+      count: boardTasks.filter((task) => task.status === column.id).length,
+    }));
+
+    const countByPriority = ["urgent", "high", "normal", "low"].map(
+      (priority) => ({
+        label: formatPriority(priority),
+        count: boardTasks.filter((task) => task.priority === priority).length,
+      }),
+    );
+
+    const countByProject = [
+      ...projects.map((project) => ({
+        label: project.name,
+        count: openTasks.filter((task) => task.projectId === project.id).length,
+      })),
+      {
+        label: "No Project",
+        count: openTasks.filter((task) => !task.projectId).length,
+      },
+    ]
+      .filter((item) => item.count > 0)
+      .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label));
+
+    const countByPerson = [
+      ...profiles.map((profileRow) => ({
+        label: displayProfileName(profileRow),
+        count: openTasks.filter((task) =>
+          task.assignedProfileIds.includes(profileRow.id),
+        ).length,
+      })),
+      {
+        label: "No Person",
+        count: openTasks.filter((task) => task.assignedProfileIds.length === 0)
+          .length,
+      },
+    ]
+      .filter((item) => item.count > 0)
+      .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label));
+
+    const countByTeam = [
+      ...teams.map((team) => ({
+        label: team.name,
+        count: openTasks.filter((task) =>
+          task.assignedTeamIds.includes(team.id),
+        ).length,
+      })),
+      {
+        label: "No Team",
+        count: openTasks.filter((task) => task.assignedTeamIds.length === 0)
+          .length,
+      },
+    ]
+      .filter((item) => item.count > 0)
+      .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label));
+
+    const recentlyCompleted = completedTasks
+      .slice()
+      .sort(
+        (a, b) => b.sortOrder - a.sortOrder || a.title.localeCompare(b.title),
+      )
+      .slice(0, 8);
+
+    return {
+      totalTasks: boardTasks.length,
+      openTasks: openTasks.length,
+      completedTasks: completedTasks.length,
+      overdueTasks,
+      dueThisWeekTasks,
+      highPriorityTasks,
+      waitingTasks,
+      reviewTasks,
+      reminderDueTasks,
+      notCopiedToBlitzitTasks,
+      countByStatus,
+      countByPriority,
+      countByProject,
+      countByPerson,
+      countByTeam,
+      recentlyCompleted,
+    };
+  }, [boardTasks, projects, profiles, teams]);
 
   async function loadProfile(userId: string) {
     setProfileMessage("");
@@ -1203,7 +1513,9 @@ export default function Home() {
 
     if (error) {
       setProfile(null);
-      setProfileMessage(`Signed in, but profile could not be loaded yet: ${error.message}`);
+      setProfileMessage(
+        `Signed in, but profile could not be loaded yet: ${error.message}`,
+      );
       return;
     }
 
@@ -1232,17 +1544,23 @@ export default function Home() {
     ]);
 
     if (projectResult.error) {
-      setAdminMessage(`Could not load admin projects: ${projectResult.error.message}`);
+      setAdminMessage(
+        `Could not load admin projects: ${projectResult.error.message}`,
+      );
       return;
     }
 
     if (teamResult.error) {
-      setAdminMessage(`Could not load admin teams: ${teamResult.error.message}`);
+      setAdminMessage(
+        `Could not load admin teams: ${teamResult.error.message}`,
+      );
       return;
     }
 
     if (profileResult.error) {
-      setAdminMessage(`Could not load admin users: ${profileResult.error.message}`);
+      setAdminMessage(
+        `Could not load admin users: ${profileResult.error.message}`,
+      );
       return;
     }
 
@@ -1291,7 +1609,9 @@ export default function Home() {
     if (!isAdmin) return;
 
     if (!active && userId === session?.user.id) {
-      setAdminMessage("You cannot deactivate your own active admin account from here.");
+      setAdminMessage(
+        "You cannot deactivate your own active admin account from here.",
+      );
       return;
     }
 
@@ -1301,11 +1621,17 @@ export default function Home() {
       .eq("id", userId);
 
     if (error) {
-      setAdminMessage(`Could not ${active ? "activate" : "deactivate"} user: ${error.message}`);
+      setAdminMessage(
+        `Could not ${active ? "activate" : "deactivate"} user: ${error.message}`,
+      );
       return;
     }
 
-    setAdminMessage(active ? "User activated." : "User deactivated. Existing task history is preserved.");
+    setAdminMessage(
+      active
+        ? "User activated."
+        : "User deactivated. Existing task history is preserved.",
+    );
     await refreshAllData();
   }
 
@@ -1314,7 +1640,9 @@ export default function Home() {
 
     const { data, error } = await supabase
       .from("task_attachments")
-      .select("id, task_id, uploaded_by_profile_id, file_name, file_path, file_type, file_size_bytes, created_at")
+      .select(
+        "id, task_id, uploaded_by_profile_id, file_name, file_path, file_type, file_size_bytes, created_at",
+      )
       .eq("task_id", taskId)
       .order("created_at", { ascending: false });
 
@@ -1344,7 +1672,11 @@ export default function Home() {
 
     const rawComments = (data ?? []) as TaskCommentRow[];
     const profileIds = Array.from(
-      new Set(rawComments.map((comment) => comment.profile_id).filter(Boolean) as string[])
+      new Set(
+        rawComments
+          .map((comment) => comment.profile_id)
+          .filter(Boolean) as string[],
+      ),
     );
 
     let commenterMap = new Map<string, string>();
@@ -1359,7 +1691,7 @@ export default function Home() {
         ((commentProfiles ?? []) as ProfileRow[]).map((profileRow) => [
           profileRow.id,
           displayProfileName(profileRow),
-        ])
+        ]),
       );
     }
 
@@ -1367,9 +1699,9 @@ export default function Home() {
       rawComments.map((comment) => ({
         ...comment,
         commenter_name: comment.profile_id
-          ? commenterMap.get(comment.profile_id) ?? "Unknown user"
+          ? (commenterMap.get(comment.profile_id) ?? "Unknown user")
           : "Unknown user",
-      }))
+      })),
     );
   }
 
@@ -1378,7 +1710,9 @@ export default function Home() {
 
     const { data, error } = await supabase
       .from("activity_log")
-      .select("id, task_id, profile_id, activity_type, activity_text, metadata, created_at")
+      .select(
+        "id, task_id, profile_id, activity_type, activity_text, metadata, created_at",
+      )
       .eq("task_id", taskId)
       .order("created_at", { ascending: false });
 
@@ -1390,7 +1724,11 @@ export default function Home() {
 
     const rawActivities = (data ?? []) as TaskActivityRow[];
     const profileIds = Array.from(
-      new Set(rawActivities.map((activity) => activity.profile_id).filter(Boolean) as string[])
+      new Set(
+        rawActivities
+          .map((activity) => activity.profile_id)
+          .filter(Boolean) as string[],
+      ),
     );
 
     let actorMap = new Map<string, string>();
@@ -1405,7 +1743,7 @@ export default function Home() {
         ((activityProfiles ?? []) as ProfileRow[]).map((profileRow) => [
           profileRow.id,
           displayProfileName(profileRow),
-        ])
+        ]),
       );
     }
 
@@ -1413,9 +1751,9 @@ export default function Home() {
       rawActivities.map((activity) => ({
         ...activity,
         actor_name: activity.profile_id
-          ? actorMap.get(activity.profile_id) ?? "Unknown user"
+          ? (actorMap.get(activity.profile_id) ?? "Unknown user")
           : "System",
-      }))
+      })),
     );
   }
 
@@ -1423,7 +1761,7 @@ export default function Home() {
     taskId: string,
     activityType: string,
     activityText: string,
-    metadata?: Record<string, unknown>
+    metadata?: Record<string, unknown>,
   ) {
     if (!session?.user.id) return;
 
@@ -1447,7 +1785,9 @@ export default function Home() {
     try {
       const { data: taskRows, error: taskError } = await supabase
         .from("tasks")
-        .select("id, project_id, title, description, status, priority, due_date, reminder_at, reminder_note, sort_order, blitzit_copied_at")
+        .select(
+          "id, project_id, title, description, status, priority, due_date, reminder_at, reminder_note, sort_order, blitzit_copied_at",
+        )
         .eq("is_archived", false)
         .order("sort_order", { ascending: true })
         .order("created_at", { ascending: true });
@@ -1458,28 +1798,56 @@ export default function Home() {
         return;
       }
 
-      const [projectsResult, assigneesResult, profilesResult, teamsResult, taskTagsResult, tagsResult, attachmentsResult, commentsResult] =
-        await Promise.all([
-          supabase.from("projects").select("id, name, is_active").eq("is_active", true).order("name"),
-          supabase.from("task_assignees").select("task_id, assignment_type, profile_id, team_id"),
-          supabase.from("profiles").select("id, email, full_name, profile_color, role, is_active").eq("is_active", true).order("full_name"),
-          supabase.from("teams").select("id, name, team_color, is_active").eq("is_active", true).order("name"),
-          supabase.from("task_tags").select("task_id, tag_id"),
-          supabase.from("tags").select("id, name, tag_color"),
-          supabase.from("task_attachments").select("task_id"),
-          supabase.from("task_comments").select("task_id"),
-        ]);
+      const [
+        projectsResult,
+        assigneesResult,
+        profilesResult,
+        teamsResult,
+        taskTagsResult,
+        tagsResult,
+        attachmentsResult,
+        commentsResult,
+      ] = await Promise.all([
+        supabase
+          .from("projects")
+          .select("id, name, is_active")
+          .eq("is_active", true)
+          .order("name"),
+        supabase
+          .from("task_assignees")
+          .select("task_id, assignment_type, profile_id, team_id"),
+        supabase
+          .from("profiles")
+          .select("id, email, full_name, profile_color, role, is_active")
+          .eq("is_active", true)
+          .order("full_name"),
+        supabase
+          .from("teams")
+          .select("id, name, team_color, is_active")
+          .eq("is_active", true)
+          .order("name"),
+        supabase.from("task_tags").select("task_id, tag_id"),
+        supabase.from("tags").select("id, name, tag_color"),
+        supabase.from("task_attachments").select("task_id"),
+        supabase.from("task_comments").select("task_id"),
+      ]);
 
       if (projectsResult.error) {
-        setTaskMessage(`Could not load projects: ${projectsResult.error.message}`);
+        setTaskMessage(
+          `Could not load projects: ${projectsResult.error.message}`,
+        );
         return;
       }
       if (assigneesResult.error) {
-        setTaskMessage(`Could not load task assignees: ${assigneesResult.error.message}`);
+        setTaskMessage(
+          `Could not load task assignees: ${assigneesResult.error.message}`,
+        );
         return;
       }
       if (profilesResult.error) {
-        setTaskMessage(`Could not load profiles: ${profilesResult.error.message}`);
+        setTaskMessage(
+          `Could not load profiles: ${profilesResult.error.message}`,
+        );
         return;
       }
       if (teamsResult.error) {
@@ -1487,7 +1855,9 @@ export default function Home() {
         return;
       }
       if (taskTagsResult.error) {
-        setTaskMessage(`Could not load task tags: ${taskTagsResult.error.message}`);
+        setTaskMessage(
+          `Could not load task tags: ${taskTagsResult.error.message}`,
+        );
         return;
       }
       if (tagsResult.error) {
@@ -1495,11 +1865,15 @@ export default function Home() {
         return;
       }
       if (attachmentsResult.error) {
-        setTaskMessage(`Could not load attachment counts: ${attachmentsResult.error.message}`);
+        setTaskMessage(
+          `Could not load attachment counts: ${attachmentsResult.error.message}`,
+        );
         return;
       }
       if (commentsResult.error) {
-        setTaskMessage(`Could not load comment counts: ${commentsResult.error.message}`);
+        setTaskMessage(
+          `Could not load comment counts: ${commentsResult.error.message}`,
+        );
         return;
       }
 
@@ -1513,30 +1887,47 @@ export default function Home() {
       setTeams(teamRows);
 
       if (!quickProjectId) setQuickProjectId(getDefaultProjectId(projectRows));
-      if (!quickProfileId && session?.user.id) setQuickProfileId(session.user.id);
+      if (!quickProfileId && session?.user.id)
+        setQuickProfileId(session.user.id);
       if (!quickTeamId) setQuickTeamId(getDefaultTeamId(teamRows));
 
-      const projectMap = new Map(projectRows.map((project) => [project.id, project]));
-      const profileMap = new Map(profileRows.map((profileRow) => [profileRow.id, profileRow]));
+      const projectMap = new Map(
+        projectRows.map((project) => [project.id, project]),
+      );
+      const profileMap = new Map(
+        profileRows.map((profileRow) => [profileRow.id, profileRow]),
+      );
       const teamMap = new Map(teamRows.map((team) => [team.id, team]));
-      const tagMap = new Map(((tagsResult.data ?? []) as TagRow[]).map((tag) => [tag.id, tag]));
+      const tagMap = new Map(
+        ((tagsResult.data ?? []) as TagRow[]).map((tag) => [tag.id, tag]),
+      );
 
       const attachmentCountByTask = new Map<string, number>();
-      ((attachmentsResult.data ?? []) as { task_id: string }[]).forEach((row) => {
-        attachmentCountByTask.set(row.task_id, (attachmentCountByTask.get(row.task_id) ?? 0) + 1);
-      });
+      ((attachmentsResult.data ?? []) as { task_id: string }[]).forEach(
+        (row) => {
+          attachmentCountByTask.set(
+            row.task_id,
+            (attachmentCountByTask.get(row.task_id) ?? 0) + 1,
+          );
+        },
+      );
 
       const commentCountByTask = new Map<string, number>();
       ((commentsResult.data ?? []) as { task_id: string }[]).forEach((row) => {
-        commentCountByTask.set(row.task_id, (commentCountByTask.get(row.task_id) ?? 0) + 1);
+        commentCountByTask.set(
+          row.task_id,
+          (commentCountByTask.get(row.task_id) ?? 0) + 1,
+        );
       });
 
       const assigneesByTask = new Map<string, TaskAssigneeRow[]>();
-      ((assigneesResult.data ?? []) as TaskAssigneeRow[]).forEach((assignee) => {
-        const existing = assigneesByTask.get(assignee.task_id) ?? [];
-        existing.push(assignee);
-        assigneesByTask.set(assignee.task_id, existing);
-      });
+      ((assigneesResult.data ?? []) as TaskAssigneeRow[]).forEach(
+        (assignee) => {
+          const existing = assigneesByTask.get(assignee.task_id) ?? [];
+          existing.push(assignee);
+          assigneesByTask.set(assignee.task_id, existing);
+        },
+      );
 
       const tagsByTask = new Map<string, string[]>();
       ((taskTagsResult.data ?? []) as TaskTagRow[]).forEach((taskTag) => {
@@ -1553,8 +1944,20 @@ export default function Home() {
         const assigneeNames: string[] = [];
         const colors: string[] = [];
         const teamNames: string[] = [];
-        const profileIds = Array.from(new Set(taskAssignees.map((assignee) => assignee.profile_id).filter(Boolean) as string[]));
-        const teamIds = Array.from(new Set(taskAssignees.map((assignee) => assignee.team_id).filter(Boolean) as string[]));
+        const profileIds = Array.from(
+          new Set(
+            taskAssignees
+              .map((assignee) => assignee.profile_id)
+              .filter(Boolean) as string[],
+          ),
+        );
+        const teamIds = Array.from(
+          new Set(
+            taskAssignees
+              .map((assignee) => assignee.team_id)
+              .filter(Boolean) as string[],
+          ),
+        );
         const firstProfileId = profileIds[0] || "";
         const firstTeamId = teamIds[0] || "";
 
@@ -1585,10 +1988,14 @@ export default function Home() {
           title: task.title,
           description: task.description,
           project: task.project_id
-            ? projectMap.get(task.project_id)?.name ?? "Archived or missing project"
+            ? (projectMap.get(task.project_id)?.name ??
+              "Archived or missing project")
             : "No project",
           assignees: Array.from(new Set(assigneeNames)),
-          team: teamNames.length > 0 ? Array.from(new Set(teamNames)).join(", ") : "No team",
+          team:
+            teamNames.length > 0
+              ? Array.from(new Set(teamNames)).join(", ")
+              : "No team",
           priority: task.priority,
           due: formatDate(task.due_date),
           dueRaw: task.due_date,
@@ -1655,7 +2062,10 @@ export default function Home() {
       ];
 
       const tableEntries = await Promise.all(
-        tableNames.map(async (tableName) => [tableName, await readBackupTable(tableName)] as const)
+        tableNames.map(
+          async (tableName) =>
+            [tableName, await readBackupTable(tableName)] as const,
+        ),
       );
 
       const data = Object.fromEntries(tableEntries);
@@ -1663,7 +2073,9 @@ export default function Home() {
       // Export integration presence without exposing webhook URLs or signing secrets in the JSON file.
       const { data: integrations, error: integrationsError } = await supabase
         .from("user_integrations")
-        .select("id, profile_id, integration_name, is_enabled, created_at, updated_at");
+        .select(
+          "id, profile_id, integration_name, is_enabled, created_at, updated_at",
+        );
 
       if (integrationsError) {
         throw new Error(`user_integrations: ${integrationsError.message}`);
@@ -1696,16 +2108,19 @@ export default function Home() {
       link.remove();
       URL.revokeObjectURL(url);
 
-      setBackupMessage("Backup exported. Check your Downloads folder for the JSON file.");
+      setBackupMessage(
+        "Backup exported. Check your Downloads folder for the JSON file.",
+      );
     } catch (error) {
       setBackupMessage(
-        error instanceof Error ? `Backup export failed: ${error.message}` : "Backup export failed."
+        error instanceof Error
+          ? `Backup export failed: ${error.message}`
+          : "Backup export failed.",
       );
     } finally {
       setExportingBackup(false);
     }
   }
-
 
   const restoreTablePlan = [
     { tableName: "profiles", onConflict: "id" },
@@ -1731,7 +2146,9 @@ export default function Home() {
     setRestoreBackupData(null);
   }
 
-  async function handleRestoreFileSelected(event: React.ChangeEvent<HTMLInputElement>) {
+  async function handleRestoreFileSelected(
+    event: React.ChangeEvent<HTMLInputElement>,
+  ) {
     if (!isAdmin) return;
 
     const file = event.target.files?.[0];
@@ -1751,7 +2168,9 @@ export default function Home() {
       };
 
       if (parsed.app !== "Graymills TaskBoard") {
-        throw new Error("This does not look like a Graymills TaskBoard backup file.");
+        throw new Error(
+          "This does not look like a Graymills TaskBoard backup file.",
+        );
       }
 
       if (!parsed.data || typeof parsed.data !== "object") {
@@ -1774,18 +2193,26 @@ export default function Home() {
 
       setRestorePreview(preview);
       setRestoreBackupData(restoreData);
-      setBackupMessage("Backup file loaded for preview. Review the counts before restoring.");
+      setBackupMessage(
+        "Backup file loaded for preview. Review the counts before restoring.",
+      );
     } catch (error) {
       clearRestorePreview();
       setBackupMessage(
-        error instanceof Error ? `Backup preview failed: ${error.message}` : "Backup preview failed."
+        error instanceof Error
+          ? `Backup preview failed: ${error.message}`
+          : "Backup preview failed.",
       );
     } finally {
       event.target.value = "";
     }
   }
 
-  async function upsertRestoreRows(tableName: string, rows: unknown[], onConflict: string) {
+  async function upsertRestoreRows(
+    tableName: string,
+    rows: unknown[],
+    onConflict: string,
+  ) {
     if (rows.length === 0) return;
 
     const { error } = await supabase
@@ -1801,7 +2228,7 @@ export default function Home() {
     if (!isAdmin || !restoreBackupData) return;
 
     const confirmed = window.confirm(
-      "Restore this backup now? This will merge records into Supabase using their saved IDs. It will not delete records that are not in the backup. Blitzit secrets and uploaded file contents are not restored."
+      "Restore this backup now? This will merge records into Supabase using their saved IDs. It will not delete records that are not in the backup. Blitzit secrets and uploaded file contents are not restored.",
     );
 
     if (!confirmed) return;
@@ -1811,15 +2238,23 @@ export default function Home() {
 
     try {
       for (const { tableName, onConflict } of restoreTablePlan) {
-        await upsertRestoreRows(tableName, restoreBackupData[tableName] ?? [], onConflict);
+        await upsertRestoreRows(
+          tableName,
+          restoreBackupData[tableName] ?? [],
+          onConflict,
+        );
       }
 
-      setBackupMessage("Backup restored. Existing matching records were updated and missing records were added. Refreshing app data...");
+      setBackupMessage(
+        "Backup restored. Existing matching records were updated and missing records were added. Refreshing app data...",
+      );
       clearRestorePreview();
       await refreshAllData();
     } catch (error) {
       setBackupMessage(
-        error instanceof Error ? `Backup restore failed: ${error.message}` : "Backup restore failed."
+        error instanceof Error
+          ? `Backup restore failed: ${error.message}`
+          : "Backup restore failed.",
       );
     } finally {
       setRestoringBackup(false);
@@ -1855,12 +2290,16 @@ export default function Home() {
     event.preventDefault();
 
     if (!session?.user.id) {
-      setBlitzitMessage("You must be signed in before saving Blitzit settings.");
+      setBlitzitMessage(
+        "You must be signed in before saving Blitzit settings.",
+      );
       return;
     }
 
     if (!blitzitWebhookUrl.trim() || !blitzitSigningSecret.trim()) {
-      setBlitzitMessage("Paste both the Blitzit Webhook URL and Signing Secret.");
+      setBlitzitMessage(
+        "Paste both the Blitzit Webhook URL and Signing Secret.",
+      );
       return;
     }
 
@@ -1875,7 +2314,7 @@ export default function Home() {
         webhook_header: blitzitSigningSecret.trim(),
         is_enabled: true,
       },
-      { onConflict: "profile_id,integration_name" }
+      { onConflict: "profile_id,integration_name" },
     );
 
     if (error) {
@@ -1888,18 +2327,21 @@ export default function Home() {
     setSavingBlitzitSettings(false);
   }
 
-
   async function loadNotificationSettings() {
     if (!session?.user.id) return;
 
     const { data: preferences, error: preferencesError } = await supabase
       .from("notification_preferences")
-      .select("profile_id, in_app_enabled, email_enabled, reminder_due_enabled, include_overdue, updated_at")
+      .select(
+        "profile_id, in_app_enabled, email_enabled, reminder_due_enabled, include_overdue, updated_at",
+      )
       .eq("profile_id", session.user.id)
       .maybeSingle();
 
     if (preferencesError) {
-      setNotificationMessage(`Could not load notification preferences: ${preferencesError.message}`);
+      setNotificationMessage(
+        `Could not load notification preferences: ${preferencesError.message}`,
+      );
     } else if (preferences) {
       const row = preferences as NotificationPreferenceRow;
       setInAppNotificationsEnabled(row.in_app_enabled);
@@ -1914,18 +2356,28 @@ export default function Home() {
       .eq("profile_id", session.user.id);
 
     if (dismissalsError) {
-      setNotificationMessage(`Could not load notification dismissals: ${dismissalsError.message}`);
+      setNotificationMessage(
+        `Could not load notification dismissals: ${dismissalsError.message}`,
+      );
       return;
     }
 
-    setDismissedNotificationTaskIds(((dismissals ?? []) as NotificationDismissalRow[]).map((row) => row.task_id));
+    setDismissedNotificationTaskIds(
+      ((dismissals ?? []) as NotificationDismissalRow[]).map(
+        (row) => row.task_id,
+      ),
+    );
   }
 
-  async function saveNotificationSettings(event: React.FormEvent<HTMLFormElement>) {
+  async function saveNotificationSettings(
+    event: React.FormEvent<HTMLFormElement>,
+  ) {
     event.preventDefault();
 
     if (!session?.user.id) {
-      setNotificationMessage("You must be signed in before saving notification preferences.");
+      setNotificationMessage(
+        "You must be signed in before saving notification preferences.",
+      );
       return;
     }
 
@@ -1941,11 +2393,13 @@ export default function Home() {
         include_overdue: includeOverdueNotifications,
         updated_at: new Date().toISOString(),
       },
-      { onConflict: "profile_id" }
+      { onConflict: "profile_id" },
     );
 
     if (error) {
-      setNotificationMessage(`Could not save notification preferences: ${error.message}`);
+      setNotificationMessage(
+        `Could not save notification preferences: ${error.message}`,
+      );
       setSavingNotificationSettings(false);
       return;
     }
@@ -1953,7 +2407,7 @@ export default function Home() {
     setNotificationMessage(
       emailNotificationsEnabled
         ? "Notification preferences saved. Email delivery is still pending SMTP setup."
-        : "Notification preferences saved."
+        : "Notification preferences saved.",
     );
     setSavingNotificationSettings(false);
   }
@@ -1967,16 +2421,18 @@ export default function Home() {
         task_id: taskId,
         dismissed_at: new Date().toISOString(),
       },
-      { onConflict: "profile_id,task_id" }
+      { onConflict: "profile_id,task_id" },
     );
 
     if (error) {
-      setNotificationMessage(`Could not dismiss notification: ${error.message}`);
+      setNotificationMessage(
+        `Could not dismiss notification: ${error.message}`,
+      );
       return;
     }
 
     setDismissedNotificationTaskIds((current) =>
-      current.includes(taskId) ? current : [...current, taskId]
+      current.includes(taskId) ? current : [...current, taskId],
     );
   }
 
@@ -1989,7 +2445,9 @@ export default function Home() {
       .eq("profile_id", session.user.id);
 
     if (error) {
-      setNotificationMessage(`Could not clear dismissed notifications: ${error.message}`);
+      setNotificationMessage(
+        `Could not clear dismissed notifications: ${error.message}`,
+      );
       return;
     }
 
@@ -2009,7 +2467,9 @@ export default function Home() {
     }
 
     if (!blitzitReady) {
-      setBlitzitMessage("Save your Blitzit Webhook URL and Signing Secret first.");
+      setBlitzitMessage(
+        "Save your Blitzit Webhook URL and Signing Secret first.",
+      );
       return;
     }
 
@@ -2034,15 +2494,22 @@ export default function Home() {
         return;
       }
 
-      await logTaskActivity(task.id, task.blitzitCopiedAt ? "blitzit_recopied" : "blitzit_copied", `${task.blitzitCopiedAt ? "Re-copied" : "Copied"} task to Blitzit.`, {
-        title: task.title,
-      });
+      await logTaskActivity(
+        task.id,
+        task.blitzitCopiedAt ? "blitzit_recopied" : "blitzit_copied",
+        `${task.blitzitCopiedAt ? "Re-copied" : "Copied"} task to Blitzit.`,
+        {
+          title: task.title,
+        },
+      );
 
       setBlitzitMessage(`Copied to Blitzit: ${task.title}`);
       await loadBoardTasks();
     } catch (error) {
       setBlitzitMessage(
-        error instanceof Error ? `Blitzit copy failed: ${error.message}` : "Blitzit copy failed."
+        error instanceof Error
+          ? `Blitzit copy failed: ${error.message}`
+          : "Blitzit copy failed.",
       );
     } finally {
       setCopyingTaskId(null);
@@ -2223,7 +2690,10 @@ export default function Home() {
   async function archiveTeam(teamId: string) {
     if (!isAdmin) return;
 
-    const { error } = await supabase.from("teams").update({ is_active: false }).eq("id", teamId);
+    const { error } = await supabase
+      .from("teams")
+      .update({ is_active: false })
+      .eq("id", teamId);
 
     if (error) {
       setAdminMessage(`Could not archive team: ${error.message}`);
@@ -2237,7 +2707,10 @@ export default function Home() {
   async function restoreTeam(teamId: string) {
     if (!isAdmin) return;
 
-    const { error } = await supabase.from("teams").update({ is_active: true }).eq("id", teamId);
+    const { error } = await supabase
+      .from("teams")
+      .update({ is_active: true })
+      .eq("id", teamId);
 
     if (error) {
       setAdminMessage(`Could not restore team: ${error.message}`);
@@ -2275,7 +2748,9 @@ export default function Home() {
     setQuickAddMessage("");
 
     try {
-      const nextSortOrder = boardTasks.filter((task) => task.status === "backlog").length * 10 + 100;
+      const nextSortOrder =
+        boardTasks.filter((task) => task.status === "backlog").length * 10 +
+        100;
 
       const { data: newTask, error: taskError } = await supabase
         .from("tasks")
@@ -2296,15 +2771,22 @@ export default function Home() {
         return;
       }
 
-      const { error: assigneeError } = await supabase.from("task_assignees").insert({
-        task_id: newTask.id,
-        profile_id: selectedProfileId || null,
-        team_id: selectedTeamId || null,
-        assignment_type: buildAssignmentType(selectedProfileId, selectedTeamId),
-      });
+      const { error: assigneeError } = await supabase
+        .from("task_assignees")
+        .insert({
+          task_id: newTask.id,
+          profile_id: selectedProfileId || null,
+          team_id: selectedTeamId || null,
+          assignment_type: buildAssignmentType(
+            selectedProfileId,
+            selectedTeamId,
+          ),
+        });
 
       if (assigneeError) {
-        setQuickAddMessage(`Task was created, but assignment failed: ${assigneeError.message}`);
+        setQuickAddMessage(
+          `Task was created, but assignment failed: ${assigneeError.message}`,
+        );
         await loadBoardTasks();
         return;
       }
@@ -2345,7 +2827,11 @@ export default function Home() {
     setNewCommentText("");
     setActivityMessage("");
     setActivities([]);
-    await Promise.all([loadAttachments(task.id), loadComments(task.id), loadActivity(task.id)]);
+    await Promise.all([
+      loadAttachments(task.id),
+      loadComments(task.id),
+      loadActivity(task.id),
+    ]);
   }
 
   function closeTaskEditor() {
@@ -2365,7 +2851,7 @@ export default function Home() {
     setEditProfileIds((current) =>
       current.includes(profileId)
         ? current.filter((id) => id !== profileId)
-        : [...current, profileId]
+        : [...current, profileId],
     );
   }
 
@@ -2373,7 +2859,7 @@ export default function Home() {
     setEditTeamIds((current) =>
       current.includes(teamId)
         ? current.filter((id) => id !== teamId)
-        : [...current, teamId]
+        : [...current, teamId],
     );
   }
 
@@ -2407,7 +2893,9 @@ export default function Home() {
           priority: editPriority,
           status: editStatus,
           due_date: editDueDate || null,
-          reminder_at: editReminderAt ? reminderDateToIso(editReminderAt) : null,
+          reminder_at: editReminderAt
+            ? reminderDateToIso(editReminderAt)
+            : null,
           reminder_note: editReminderNote.trim() || null,
           completed_at: editStatus === "done" ? new Date().toISOString() : null,
         })
@@ -2424,7 +2912,9 @@ export default function Home() {
         .eq("task_id", selectedTask.id);
 
       if (deleteError) {
-        setEditMessage(`Task details saved, but old assignment could not be cleared: ${deleteError.message}`);
+        setEditMessage(
+          `Task details saved, but old assignment could not be cleared: ${deleteError.message}`,
+        );
         return;
       }
 
@@ -2448,19 +2938,26 @@ export default function Home() {
         .insert(assignmentRows);
 
       if (insertError) {
-        setEditMessage(`Task details saved, but new assignments could not be saved: ${insertError.message}`);
+        setEditMessage(
+          `Task details saved, but new assignments could not be saved: ${insertError.message}`,
+        );
         return;
       }
 
-      await logTaskActivity(selectedTask.id, "updated", buildTaskEditActivityText(selectedTask), {
-        title: cleanTitle,
-        priority: editPriority,
-        status: editStatus,
-        due_date: editDueDate || null,
-        project_id: editProjectId || null,
-        profile_ids: editProfileIds,
-        team_ids: editTeamIds,
-      });
+      await logTaskActivity(
+        selectedTask.id,
+        "updated",
+        buildTaskEditActivityText(selectedTask),
+        {
+          title: cleanTitle,
+          priority: editPriority,
+          status: editStatus,
+          due_date: editDueDate || null,
+          project_id: editProjectId || null,
+          profile_ids: editProfileIds,
+          team_ids: editTeamIds,
+        },
+      );
 
       await loadBoardTasks();
       await loadActivity(selectedTask.id);
@@ -2492,24 +2989,33 @@ export default function Home() {
         return;
       }
 
-      const { error: insertError } = await supabase.from("task_attachments").insert({
-        task_id: selectedTask.id,
-        uploaded_by_profile_id: session.user.id,
-        file_name: file.name,
-        file_path: storagePath,
-        file_type: file.type || null,
-        file_size_bytes: file.size,
-      });
+      const { error: insertError } = await supabase
+        .from("task_attachments")
+        .insert({
+          task_id: selectedTask.id,
+          uploaded_by_profile_id: session.user.id,
+          file_name: file.name,
+          file_path: storagePath,
+          file_type: file.type || null,
+          file_size_bytes: file.size,
+        });
 
       if (insertError) {
-        setAttachmentMessage(`File uploaded, but attachment record failed: ${insertError.message}`);
+        setAttachmentMessage(
+          `File uploaded, but attachment record failed: ${insertError.message}`,
+        );
         return;
       }
 
-      await logTaskActivity(selectedTask.id, "attachment_added", `Added attachment: ${file.name}.`, {
-        file_name: file.name,
-        file_size_bytes: file.size,
-      });
+      await logTaskActivity(
+        selectedTask.id,
+        "attachment_added",
+        `Added attachment: ${file.name}.`,
+        {
+          file_name: file.name,
+          file_size_bytes: file.size,
+        },
+      );
 
       setSelectedAttachmentFile(null);
       setAttachmentMessage("File attached.");
@@ -2525,7 +3031,9 @@ export default function Home() {
     event.preventDefault();
 
     if (!session?.user.id || !selectedTask) {
-      setCommentMessage("You must be signed in and have a task open to comment.");
+      setCommentMessage(
+        "You must be signed in and have a task open to comment.",
+      );
       return;
     }
 
@@ -2551,12 +3059,21 @@ export default function Home() {
         return;
       }
 
-      await logTaskActivity(selectedTask.id, "comment_added", "Added a comment.", {
-        comment_preview: cleanComment.slice(0, 120),
-      });
+      await logTaskActivity(
+        selectedTask.id,
+        "comment_added",
+        "Added a comment.",
+        {
+          comment_preview: cleanComment.slice(0, 120),
+        },
+      );
 
       setNewCommentText("");
-      await Promise.all([loadComments(selectedTask.id), loadActivity(selectedTask.id), loadBoardTasks()]);
+      await Promise.all([
+        loadComments(selectedTask.id),
+        loadActivity(selectedTask.id),
+        loadBoardTasks(),
+      ]);
     } finally {
       setSavingComment(false);
     }
@@ -2603,7 +3120,9 @@ export default function Home() {
       .remove([attachment.file_path]);
 
     if (storageError) {
-      setAttachmentMessage(`Could not delete file from storage: ${storageError.message}`);
+      setAttachmentMessage(
+        `Could not delete file from storage: ${storageError.message}`,
+      );
       return;
     }
 
@@ -2613,13 +3132,20 @@ export default function Home() {
       .eq("id", attachment.id);
 
     if (recordError) {
-      setAttachmentMessage(`File deleted, but attachment record remained: ${recordError.message}`);
+      setAttachmentMessage(
+        `File deleted, but attachment record remained: ${recordError.message}`,
+      );
       return;
     }
 
-    await logTaskActivity(selectedTask.id, "attachment_deleted", `Deleted attachment: ${attachment.file_name}.`, {
-      file_name: attachment.file_name,
-    });
+    await logTaskActivity(
+      selectedTask.id,
+      "attachment_deleted",
+      `Deleted attachment: ${attachment.file_name}.`,
+      {
+        file_name: attachment.file_name,
+      },
+    );
 
     setAttachmentMessage("Attachment deleted.");
     await loadAttachments(selectedTask.id);
@@ -2628,12 +3154,19 @@ export default function Home() {
   }
 
   function getDragTarget(event: DragEndEvent) {
-    const activeTaskId = event.active.data.current?.taskId as string | undefined;
-    const sourceColumnId = event.active.data.current?.columnId as string | undefined;
-    const targetColumnId = event.over?.data.current?.columnId as string | undefined;
-    const overTaskId = event.over?.data.current?.type === "card"
-      ? (event.over.data.current.taskId as string | undefined)
-      : undefined;
+    const activeTaskId = event.active.data.current?.taskId as
+      | string
+      | undefined;
+    const sourceColumnId = event.active.data.current?.columnId as
+      | string
+      | undefined;
+    const targetColumnId = event.over?.data.current?.columnId as
+      | string
+      | undefined;
+    const overTaskId =
+      event.over?.data.current?.type === "card"
+        ? (event.over.data.current.taskId as string | undefined)
+        : undefined;
 
     return {
       activeTaskId,
@@ -2646,17 +3179,22 @@ export default function Home() {
   function buildOrderedColumnTasks(
     columnId: string,
     movedTask: BoardTask,
-    overTaskId?: string
+    overTaskId?: string,
   ) {
     const destinationTasks = filteredBoardTasks
-      .filter((task) => taskBelongsToColumn(task, columnId) && task.id !== movedTask.id)
+      .filter(
+        (task) =>
+          taskBelongsToColumn(task, columnId) && task.id !== movedTask.id,
+      )
       .sort((a, b) => a.sortOrder - b.sortOrder);
 
     if (!overTaskId) {
       return [...destinationTasks, movedTask];
     }
 
-    const overIndex = destinationTasks.findIndex((task) => task.id === overTaskId);
+    const overIndex = destinationTasks.findIndex(
+      (task) => task.id === overTaskId,
+    );
 
     if (overIndex < 0) {
       return [...destinationTasks, movedTask];
@@ -2670,7 +3208,7 @@ export default function Home() {
   async function saveSortOrderForTasks(
     orderedTasks: BoardTask[],
     movedTaskId: string,
-    movedTaskUpdates: Record<string, unknown> = {}
+    movedTaskUpdates: Record<string, unknown> = {},
   ) {
     const results = await Promise.all(
       orderedTasks.map((task, index) =>
@@ -2680,8 +3218,8 @@ export default function Home() {
             sort_order: (index + 1) * 10,
             ...(task.id === movedTaskId ? movedTaskUpdates : {}),
           })
-          .eq("id", task.id)
-      )
+          .eq("id", task.id),
+      ),
     );
 
     const failedUpdate = results.find((result) => result.error);
@@ -2692,24 +3230,32 @@ export default function Home() {
   }
 
   async function handleDragEnd(event: DragEndEvent) {
-    const { activeTaskId, sourceColumnId, targetColumnId, overTaskId } = getDragTarget(event);
+    const { activeTaskId, sourceColumnId, targetColumnId, overTaskId } =
+      getDragTarget(event);
 
     if (!activeTaskId || !targetColumnId) return;
 
     const movedTask = boardTasks.find((task) => task.id === activeTaskId);
     if (!movedTask) return;
 
-    if (sourceColumnId === targetColumnId && overTaskId === activeTaskId) return;
+    if (sourceColumnId === targetColumnId && overTaskId === activeTaskId)
+      return;
 
     setMovingTaskId(activeTaskId);
     setTaskMessage("");
 
     const previousTasks = boardTasks;
-    const orderedDestinationTasks = buildOrderedColumnTasks(targetColumnId, movedTask, overTaskId);
+    const orderedDestinationTasks = buildOrderedColumnTasks(
+      targetColumnId,
+      movedTask,
+      overTaskId,
+    );
 
     try {
       if (boardView === "status") {
-        const validStatus = statusColumns.some((column) => column.id === targetColumnId);
+        const validStatus = statusColumns.some(
+          (column) => column.id === targetColumnId,
+        );
         if (!validStatus) {
           setMovingTaskId(null);
           return;
@@ -2717,18 +3263,23 @@ export default function Home() {
 
         setBoardTasks((currentTasks) =>
           currentTasks.map((task) => {
-            if (task.id === activeTaskId) return { ...task, status: targetColumnId };
+            if (task.id === activeTaskId)
+              return { ...task, status: targetColumnId };
 
-            const orderedIndex = orderedDestinationTasks.findIndex((orderedTask) => orderedTask.id === task.id);
-            if (orderedIndex >= 0) return { ...task, sortOrder: (orderedIndex + 1) * 10 };
+            const orderedIndex = orderedDestinationTasks.findIndex(
+              (orderedTask) => orderedTask.id === task.id,
+            );
+            if (orderedIndex >= 0)
+              return { ...task, sortOrder: (orderedIndex + 1) * 10 };
 
             return task;
-          })
+          }),
         );
 
         await saveSortOrderForTasks(orderedDestinationTasks, activeTaskId, {
           status: targetColumnId,
-          completed_at: targetColumnId === "done" ? new Date().toISOString() : null,
+          completed_at:
+            targetColumnId === "done" ? new Date().toISOString() : null,
         });
       }
 
@@ -2743,14 +3294,21 @@ export default function Home() {
         setBoardTasks((currentTasks) =>
           currentTasks.map((task) => {
             if (task.id === activeTaskId) {
-              return { ...task, dueRaw: newDueDate, due: formatDate(newDueDate) };
+              return {
+                ...task,
+                dueRaw: newDueDate,
+                due: formatDate(newDueDate),
+              };
             }
 
-            const orderedIndex = orderedDestinationTasks.findIndex((orderedTask) => orderedTask.id === task.id);
-            if (orderedIndex >= 0) return { ...task, sortOrder: (orderedIndex + 1) * 10 };
+            const orderedIndex = orderedDestinationTasks.findIndex(
+              (orderedTask) => orderedTask.id === task.id,
+            );
+            if (orderedIndex >= 0)
+              return { ...task, sortOrder: (orderedIndex + 1) * 10 };
 
             return task;
-          })
+          }),
         );
 
         await saveSortOrderForTasks(orderedDestinationTasks, activeTaskId, {
@@ -2764,20 +3322,28 @@ export default function Home() {
           : null;
 
         const newProjectName = newProjectId
-          ? projects.find((project) => project.id === newProjectId)?.name || "Project"
+          ? projects.find((project) => project.id === newProjectId)?.name ||
+            "Project"
           : "No project";
 
         setBoardTasks((currentTasks) =>
           currentTasks.map((task) => {
             if (task.id === activeTaskId) {
-              return { ...task, projectId: newProjectId, project: newProjectName };
+              return {
+                ...task,
+                projectId: newProjectId,
+                project: newProjectName,
+              };
             }
 
-            const orderedIndex = orderedDestinationTasks.findIndex((orderedTask) => orderedTask.id === task.id);
-            if (orderedIndex >= 0) return { ...task, sortOrder: (orderedIndex + 1) * 10 };
+            const orderedIndex = orderedDestinationTasks.findIndex(
+              (orderedTask) => orderedTask.id === task.id,
+            );
+            if (orderedIndex >= 0)
+              return { ...task, sortOrder: (orderedIndex + 1) * 10 };
 
             return task;
-          })
+          }),
         );
 
         await saveSortOrderForTasks(orderedDestinationTasks, activeTaskId, {
@@ -2806,14 +3372,23 @@ export default function Home() {
             .eq("task_id", activeTaskId);
 
           if (deleteError) {
-            setTaskMessage(`Could not clear old assignment: ${deleteError.message}`);
+            setTaskMessage(
+              `Could not clear old assignment: ${deleteError.message}`,
+            );
             setMovingTaskId(null);
             return;
           }
 
           const newAssignments = [
             ...(newProfileId
-              ? [{ task_id: activeTaskId, profile_id: newProfileId, team_id: null, assignment_type: "person" }]
+              ? [
+                  {
+                    task_id: activeTaskId,
+                    profile_id: newProfileId,
+                    team_id: null,
+                    assignment_type: "person",
+                  },
+                ]
               : []),
             ...existingTeamIds.map((teamId) => ({
               task_id: activeTaskId,
@@ -2824,10 +3399,14 @@ export default function Home() {
           ];
 
           if (newAssignments.length > 0) {
-            const { error: insertError } = await supabase.from("task_assignees").insert(newAssignments);
+            const { error: insertError } = await supabase
+              .from("task_assignees")
+              .insert(newAssignments);
 
             if (insertError) {
-              setTaskMessage(`Could not save new person assignment: ${insertError.message}`);
+              setTaskMessage(
+                `Could not save new person assignment: ${insertError.message}`,
+              );
               setMovingTaskId(null);
               return;
             }
@@ -2836,10 +3415,13 @@ export default function Home() {
 
         setBoardTasks((currentTasks) =>
           currentTasks.map((task) => {
-            const orderedIndex = orderedDestinationTasks.findIndex((orderedTask) => orderedTask.id === task.id);
-            if (orderedIndex >= 0) return { ...task, sortOrder: (orderedIndex + 1) * 10 };
+            const orderedIndex = orderedDestinationTasks.findIndex(
+              (orderedTask) => orderedTask.id === task.id,
+            );
+            if (orderedIndex >= 0)
+              return { ...task, sortOrder: (orderedIndex + 1) * 10 };
             return task;
-          })
+          }),
         );
 
         await saveSortOrderForTasks(orderedDestinationTasks, activeTaskId);
@@ -2866,7 +3448,9 @@ export default function Home() {
             .eq("task_id", activeTaskId);
 
           if (deleteError) {
-            setTaskMessage(`Could not clear old assignment: ${deleteError.message}`);
+            setTaskMessage(
+              `Could not clear old assignment: ${deleteError.message}`,
+            );
             setMovingTaskId(null);
             return;
           }
@@ -2879,15 +3463,26 @@ export default function Home() {
               assignment_type: "person",
             })),
             ...(newTeamId
-              ? [{ task_id: activeTaskId, profile_id: null, team_id: newTeamId, assignment_type: "team" }]
+              ? [
+                  {
+                    task_id: activeTaskId,
+                    profile_id: null,
+                    team_id: newTeamId,
+                    assignment_type: "team",
+                  },
+                ]
               : []),
           ];
 
           if (newAssignments.length > 0) {
-            const { error: insertError } = await supabase.from("task_assignees").insert(newAssignments);
+            const { error: insertError } = await supabase
+              .from("task_assignees")
+              .insert(newAssignments);
 
             if (insertError) {
-              setTaskMessage(`Could not save new team assignment: ${insertError.message}`);
+              setTaskMessage(
+                `Could not save new team assignment: ${insertError.message}`,
+              );
               setMovingTaskId(null);
               return;
             }
@@ -2896,26 +3491,38 @@ export default function Home() {
 
         setBoardTasks((currentTasks) =>
           currentTasks.map((task) => {
-            const orderedIndex = orderedDestinationTasks.findIndex((orderedTask) => orderedTask.id === task.id);
-            if (orderedIndex >= 0) return { ...task, sortOrder: (orderedIndex + 1) * 10 };
+            const orderedIndex = orderedDestinationTasks.findIndex(
+              (orderedTask) => orderedTask.id === task.id,
+            );
+            if (orderedIndex >= 0)
+              return { ...task, sortOrder: (orderedIndex + 1) * 10 };
             return task;
-          })
+          }),
         );
 
         await saveSortOrderForTasks(orderedDestinationTasks, activeTaskId);
       }
 
-      await logTaskActivity(activeTaskId, "moved", `Moved task in ${boardView} view.`, {
-        board_view: boardView,
-        source_column: sourceColumnId ?? null,
-        target_column: targetColumnId,
-      });
+      await logTaskActivity(
+        activeTaskId,
+        "moved",
+        `Moved task in ${boardView} view.`,
+        {
+          board_view: boardView,
+          source_column: sourceColumnId ?? null,
+          target_column: targetColumnId,
+        },
+      );
 
       await loadBoardTasks();
       setMovingTaskId(null);
     } catch (error) {
       setBoardTasks(previousTasks);
-      setTaskMessage(error instanceof Error ? `Move failed: ${error.message}` : "Move failed.");
+      setTaskMessage(
+        error instanceof Error
+          ? `Move failed: ${error.message}`
+          : "Move failed.",
+      );
       setMovingTaskId(null);
     }
   }
@@ -2949,7 +3556,11 @@ export default function Home() {
         if (data.session?.user.id) loadProfile(data.session.user.id);
       } catch (error) {
         if (!isMounted) return;
-        setProfileMessage(error instanceof Error ? `Session failed to load: ${error.message}` : "Session failed to load.");
+        setProfileMessage(
+          error instanceof Error
+            ? `Session failed to load: ${error.message}`
+            : "Session failed to load.",
+        );
         setSession(null);
         setLoadingSession(false);
       }
@@ -2957,7 +3568,9 @@ export default function Home() {
 
     initializeSession();
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, newSession) => {
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, newSession) => {
       setSession(newSession);
       setLoadingSession(false);
 
@@ -3008,7 +3621,8 @@ export default function Home() {
             Account inactive
           </h1>
           <p className="mt-2 text-sm text-slate-600">
-            Your TaskBoard account is inactive. Contact an admin to reactivate your account.
+            Your TaskBoard account is inactive. Contact an admin to reactivate
+            your account.
           </p>
           <button
             onClick={handleLogout}
@@ -3032,30 +3646,42 @@ export default function Home() {
               className="mt-1 h-11 w-auto shrink-0 object-contain"
             />
             <div>
-              <p className="text-xs font-medium text-slate-500">{APP_REVISION}</p>
+              <p className="text-xs font-medium text-slate-500">
+                {APP_REVISION}
+              </p>
               <h1 className="mt-1 text-2xl font-bold tracking-tight text-slate-950">
                 Graymills TaskBoard
               </h1>
               <p className="mt-1 text-sm text-slate-600">
-                Shared marketing project tasks, ad hoc teams, due dates, priorities,
-                files, comments, attachments, and one-way Blitzit copying.
+                Shared marketing project tasks, ad hoc teams, due dates,
+                priorities, files, comments, attachments, and one-way Blitzit
+                copying.
               </p>
             </div>
           </div>
 
           <div className="space-y-2">
-            <div className={`rounded-2xl border px-4 py-3 text-sm font-semibold ${supabaseStatusStyle}`}>
+            <div
+              className={`rounded-2xl border px-4 py-3 text-sm font-semibold ${supabaseStatusStyle}`}
+            >
               {supabaseStatus}
             </div>
 
             <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
               <p className="font-semibold text-slate-900">Signed in as</p>
               <p>{currentEmail}</p>
-              <p className="mt-1">Role: <span className="font-semibold">{roleLabel}</span></p>
+              <p className="mt-1">
+                Role: <span className="font-semibold">{roleLabel}</span>
+              </p>
               {profile?.profile_color && (
                 <div className="mt-2 flex items-center gap-2">
-                  <span className="h-3 w-8 rounded-full border border-slate-200" style={{ backgroundColor: profile.profile_color }} />
-                  <span className="text-xs text-slate-500">Profile color: {profile.profile_color}</span>
+                  <span
+                    className="h-3 w-8 rounded-full border border-slate-200"
+                    style={{ backgroundColor: profile.profile_color }}
+                  />
+                  <span className="text-xs text-slate-500">
+                    Profile color: {profile.profile_color}
+                  </span>
                 </div>
               )}
               <div className="mt-2 flex flex-wrap gap-1.5">
@@ -3073,7 +3699,17 @@ export default function Home() {
                   onClick={() => setNotificationsOpen(true)}
                   className={`rounded-xl border px-3 py-2 text-xs font-semibold ${activeNotificationCount > 0 ? "border-amber-300 bg-amber-50 text-amber-800 hover:bg-amber-100" : "border-slate-300 bg-white text-slate-700 hover:bg-slate-50"}`}
                 >
-                  Notifications{activeNotificationCount > 0 ? ` (${activeNotificationCount})` : ""}
+                  Notifications
+                  {activeNotificationCount > 0
+                    ? ` (${activeNotificationCount})`
+                    : ""}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setDashboardOpen(true)}
+                  className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                >
+                  Dashboard
                 </button>
                 <button
                   type="button"
@@ -3119,8 +3755,13 @@ export default function Home() {
 
       <section className="mx-auto max-w-[1600px] px-4 py-4 sm:px-6">
         <div className="grid gap-3 xl:grid-cols-[minmax(0,2fr)_320px]">
-          <form onSubmit={handleQuickAdd} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-            <label className="text-sm font-semibold text-slate-900">Quick Add</label>
+          <form
+            onSubmit={handleQuickAdd}
+            className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"
+          >
+            <label className="text-sm font-semibold text-slate-900">
+              Quick Add
+            </label>
 
             <div className="mt-2 grid gap-3 lg:grid-cols-[2fr_1fr_1fr_1fr_auto]">
               <input
@@ -3136,7 +3777,11 @@ export default function Home() {
                 onChange={(event) => setQuickProjectId(event.target.value)}
               >
                 <option value="">No project</option>
-                {projects.map((project) => <option key={project.id} value={project.id}>{project.name}</option>)}
+                {projects.map((project) => (
+                  <option key={project.id} value={project.id}>
+                    {project.name}
+                  </option>
+                ))}
               </select>
 
               <select
@@ -3158,7 +3803,11 @@ export default function Home() {
                 onChange={(event) => setQuickTeamId(event.target.value)}
               >
                 <option value="">No team</option>
-                {teams.map((team) => <option key={team.id} value={team.id}>{team.name}</option>)}
+                {teams.map((team) => (
+                  <option key={team.id} value={team.id}>
+                    {team.name}
+                  </option>
+                ))}
               </select>
 
               <button
@@ -3171,7 +3820,8 @@ export default function Home() {
             </div>
 
             <p className="mt-2 text-xs text-slate-500">
-              Creates a real Backlog task with project, person, and team assignment.
+              Creates a real Backlog task with project, person, and team
+              assignment.
             </p>
             {quickAddMessage && (
               <div className="mt-3 rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">
@@ -3181,16 +3831,23 @@ export default function Home() {
           </form>
 
           <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-            <h2 className="text-sm font-semibold text-slate-900">Board Controls</h2>
+            <h2 className="text-sm font-semibold text-slate-900">
+              Board Controls
+            </h2>
             <div className="mt-3 space-y-2">
-              <label className="text-xs font-semibold text-slate-600" htmlFor="board-view-select">
+              <label
+                className="text-xs font-semibold text-slate-600"
+                htmlFor="board-view-select"
+              >
                 View
               </label>
               <select
                 id="board-view-select"
                 className="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-800 outline-none focus:border-slate-500"
                 value={boardView}
-                onChange={(event) => setBoardView(event.target.value as BoardView)}
+                onChange={(event) =>
+                  setBoardView(event.target.value as BoardView)
+                }
               >
                 <option value="status">Status View</option>
                 <option value="assigned">Assigned To View</option>
@@ -3200,7 +3857,8 @@ export default function Home() {
               </select>
             </div>
             <p className="mt-3 text-xs text-slate-500">
-              Dragging cards changes status, person assignment, team assignment, project, or due date depending on the selected view.
+              Dragging cards changes status, person assignment, team assignment,
+              project, or due date depending on the selected view.
             </p>
           </div>
         </div>
@@ -3216,27 +3874,41 @@ export default function Home() {
                     {boardView === "status"
                       ? "Status"
                       : boardView === "assigned"
-                      ? "Assigned To"
-                      : boardView === "team"
-                      ? "By Team"
-                      : boardView === "calendar"
-                      ? "Calendar"
-                      : "Project"}
+                        ? "Assigned To"
+                        : boardView === "team"
+                          ? "By Team"
+                          : boardView === "calendar"
+                            ? "Calendar"
+                            : "Project"}
                   </span>
-                  . Dragging cards changes the field represented by the current view. In Calendar View, dropping into a date bucket updates the due date.
+                  . Dragging cards changes the field represented by the current
+                  view. In Calendar View, dropping into a date bucket updates
+                  the due date.
                 </p>
                 <p className="mt-1 text-xs text-slate-500">
-                  Showing: <span className="font-semibold">{getSmartFilterLabel(activeSmartFilter)}</span>
+                  Showing:{" "}
+                  <span className="font-semibold">
+                    {getSmartFilterLabel(activeSmartFilter)}
+                  </span>
                   {taskSearchQuery.trim() ? (
-                    <span> · Search: <span className="font-semibold">{taskSearchQuery.trim()}</span></span>
-                  ) : null}
-                  {" "}· {filteredBoardTasks.length} of {boardTasks.length} tasks
+                    <span>
+                      {" "}
+                      · Search:{" "}
+                      <span className="font-semibold">
+                        {taskSearchQuery.trim()}
+                      </span>
+                    </span>
+                  ) : null}{" "}
+                  · {filteredBoardTasks.length} of {boardTasks.length} tasks
                 </p>
               </div>
 
               <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
                 <div className="flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-3 py-2 shadow-sm">
-                  <label className="text-xs font-semibold text-slate-600" htmlFor="task-search">
+                  <label
+                    className="text-xs font-semibold text-slate-600"
+                    htmlFor="task-search"
+                  >
                     Search
                   </label>
                   <input
@@ -3258,14 +3930,19 @@ export default function Home() {
                 </div>
 
                 <div className="flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-3 py-2 shadow-sm">
-                  <label className="text-xs font-semibold text-slate-600" htmlFor="smart-filter">
+                  <label
+                    className="text-xs font-semibold text-slate-600"
+                    htmlFor="smart-filter"
+                  >
                     Filter
                   </label>
                   <select
                     id="smart-filter"
                     className="rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs font-semibold text-slate-800 outline-none focus:border-slate-500"
                     value={activeSmartFilter}
-                    onChange={(event) => setActiveSmartFilter(event.target.value as SmartFilterId)}
+                    onChange={(event) =>
+                      setActiveSmartFilter(event.target.value as SmartFilterId)
+                    }
                   >
                     {smartFilterOptions.map((filterOption) => (
                       <option key={filterOption.id} value={filterOption.id}>
@@ -3322,7 +3999,9 @@ export default function Home() {
               <div className="overflow-x-auto pb-4">
                 <div className="flex min-w-max gap-4">
                   {currentBoardColumns.map((column) => {
-                    const columnTasks = filteredBoardTasks.filter((task) => taskBelongsToColumn(task, column.id));
+                    const columnTasks = filteredBoardTasks.filter((task) =>
+                      taskBelongsToColumn(task, column.id),
+                    );
 
                     return (
                       <BoardColumn
@@ -3340,18 +4019,272 @@ export default function Home() {
               </div>
             </DndContext>
           </section>
-
-
         </div>
       </section>
+
+      {dashboardOpen && (
+        <div className="fixed inset-0 z-40 flex justify-end bg-slate-950/40">
+          <div className="h-full w-full max-w-5xl overflow-y-auto border-l border-slate-200 bg-slate-50 p-5 shadow-2xl">
+            <div className="mb-4 flex items-start justify-between gap-4">
+              <div>
+                <p className="text-xs font-medium text-slate-500">
+                  {APP_REVISION}
+                </p>
+                <h2 className="mt-1 text-2xl font-bold text-slate-950">
+                  Dashboard & Reporting
+                </h2>
+                <p className="mt-1 text-sm text-slate-600">
+                  A quick management view of open work, due dates, reminders,
+                  priorities, projects, people, and teams.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setDashboardOpen(false)}
+                className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+              >
+                Close
+              </button>
+            </div>
+
+            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+              <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                  Open Tasks
+                </p>
+                <p className="mt-2 text-3xl font-bold text-slate-950">
+                  {dashboardStats.openTasks}
+                </p>
+                <p className="mt-1 text-xs text-slate-500">
+                  {dashboardStats.completedTasks} completed ·{" "}
+                  {dashboardStats.totalTasks} total
+                </p>
+              </div>
+              <div className="rounded-2xl border border-red-200 bg-red-50 p-4 shadow-sm">
+                <p className="text-xs font-semibold uppercase tracking-wide text-red-700">
+                  Overdue
+                </p>
+                <p className="mt-2 text-3xl font-bold text-red-900">
+                  {dashboardStats.overdueTasks.length}
+                </p>
+                <p className="mt-1 text-xs text-red-700">
+                  Open tasks with due dates before today
+                </p>
+              </div>
+              <div className="rounded-2xl border border-blue-200 bg-blue-50 p-4 shadow-sm">
+                <p className="text-xs font-semibold uppercase tracking-wide text-blue-700">
+                  Due This Week
+                </p>
+                <p className="mt-2 text-3xl font-bold text-blue-900">
+                  {dashboardStats.dueThisWeekTasks.length}
+                </p>
+                <p className="mt-1 text-xs text-blue-700">
+                  Open tasks due today through the next 7 days
+                </p>
+              </div>
+              <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 shadow-sm">
+                <p className="text-xs font-semibold uppercase tracking-wide text-amber-700">
+                  High / Urgent
+                </p>
+                <p className="mt-2 text-3xl font-bold text-amber-900">
+                  {dashboardStats.highPriorityTasks.length}
+                </p>
+                <p className="mt-1 text-xs text-amber-700">
+                  Open high-priority or urgent tasks
+                </p>
+              </div>
+              <div className="rounded-2xl border border-purple-200 bg-purple-50 p-4 shadow-sm">
+                <p className="text-xs font-semibold uppercase tracking-wide text-purple-700">
+                  Reminder Due
+                </p>
+                <p className="mt-2 text-3xl font-bold text-purple-900">
+                  {dashboardStats.reminderDueTasks.length}
+                </p>
+                <p className="mt-1 text-xs text-purple-700">
+                  Open tasks with reminders due today or earlier
+                </p>
+              </div>
+              <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                  Not Copied to Blitzit
+                </p>
+                <p className="mt-2 text-3xl font-bold text-slate-950">
+                  {dashboardStats.notCopiedToBlitzitTasks.length}
+                </p>
+                <p className="mt-1 text-xs text-slate-500">
+                  Open tasks not yet sent to Blitzit
+                </p>
+              </div>
+            </div>
+
+            <div className="mt-5 grid gap-4 xl:grid-cols-2">
+              <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                <h3 className="text-sm font-bold text-slate-950">
+                  Tasks by Status
+                </h3>
+                <div className="mt-3 space-y-2">
+                  {dashboardStats.countByStatus.map((item) => (
+                    <div
+                      key={item.label}
+                      className="flex items-center justify-between rounded-xl bg-slate-50 px-3 py-2 text-sm"
+                    >
+                      <span className="text-slate-700">{item.label}</span>
+                      <span className="font-semibold text-slate-950">
+                        {item.count}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                <h3 className="text-sm font-bold text-slate-950">
+                  Tasks by Priority
+                </h3>
+                <div className="mt-3 space-y-2">
+                  {dashboardStats.countByPriority.map((item) => (
+                    <div
+                      key={item.label}
+                      className="flex items-center justify-between rounded-xl bg-slate-50 px-3 py-2 text-sm"
+                    >
+                      <span className="text-slate-700">{item.label}</span>
+                      <span className="font-semibold text-slate-950">
+                        {item.count}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                <h3 className="text-sm font-bold text-slate-950">
+                  Open Tasks by Project
+                </h3>
+                <div className="mt-3 space-y-2">
+                  {dashboardStats.countByProject.length === 0 ? (
+                    <p className="rounded-xl bg-slate-50 p-3 text-sm text-slate-500">
+                      No open tasks by project.
+                    </p>
+                  ) : (
+                    dashboardStats.countByProject.slice(0, 12).map((item) => (
+                      <div
+                        key={item.label}
+                        className="flex items-center justify-between rounded-xl bg-slate-50 px-3 py-2 text-sm"
+                      >
+                        <span className="text-slate-700">{item.label}</span>
+                        <span className="font-semibold text-slate-950">
+                          {item.count}
+                        </span>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+
+              <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                <h3 className="text-sm font-bold text-slate-950">
+                  Open Tasks by Person
+                </h3>
+                <div className="mt-3 space-y-2">
+                  {dashboardStats.countByPerson.length === 0 ? (
+                    <p className="rounded-xl bg-slate-50 p-3 text-sm text-slate-500">
+                      No open tasks assigned to people.
+                    </p>
+                  ) : (
+                    dashboardStats.countByPerson.slice(0, 12).map((item) => (
+                      <div
+                        key={item.label}
+                        className="flex items-center justify-between rounded-xl bg-slate-50 px-3 py-2 text-sm"
+                      >
+                        <span className="text-slate-700">{item.label}</span>
+                        <span className="font-semibold text-slate-950">
+                          {item.count}
+                        </span>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+
+              <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                <h3 className="text-sm font-bold text-slate-950">
+                  Open Tasks by Team
+                </h3>
+                <div className="mt-3 space-y-2">
+                  {dashboardStats.countByTeam.length === 0 ? (
+                    <p className="rounded-xl bg-slate-50 p-3 text-sm text-slate-500">
+                      No open tasks assigned to teams.
+                    </p>
+                  ) : (
+                    dashboardStats.countByTeam.slice(0, 12).map((item) => (
+                      <div
+                        key={item.label}
+                        className="flex items-center justify-between rounded-xl bg-slate-50 px-3 py-2 text-sm"
+                      >
+                        <span className="text-slate-700">{item.label}</span>
+                        <span className="font-semibold text-slate-950">
+                          {item.count}
+                        </span>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+
+              <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                <h3 className="text-sm font-bold text-slate-950">
+                  Recently Completed
+                </h3>
+                <div className="mt-3 space-y-2">
+                  {dashboardStats.recentlyCompleted.length === 0 ? (
+                    <p className="rounded-xl bg-slate-50 p-3 text-sm text-slate-500">
+                      No completed tasks yet.
+                    </p>
+                  ) : (
+                    dashboardStats.recentlyCompleted.map((task) => (
+                      <div
+                        key={task.id}
+                        className="rounded-xl bg-slate-50 px-3 py-2 text-sm"
+                      >
+                        <p className="font-semibold text-slate-900">
+                          {task.title}
+                        </p>
+                        <p className="text-xs text-slate-500">
+                          {task.project} ·{" "}
+                          {task.assignees.length > 0
+                            ? task.assignees.join(", ")
+                            : "Unassigned"}
+                        </p>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-5 rounded-2xl border border-slate-200 bg-white p-4 text-sm text-slate-600 shadow-sm">
+              <p className="font-semibold text-slate-900">Version 2.4 note</p>
+              <p className="mt-1">
+                This first dashboard uses summary cards and lightweight tables.
+                Charts and exportable reports can be added later if the team
+                finds this view useful.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
 
       {helpOpen && (
         <div className="fixed inset-0 z-40 flex justify-end bg-slate-950/40">
           <div className="h-full w-full max-w-3xl overflow-y-auto border-l border-slate-200 bg-slate-50 p-5 shadow-2xl">
             <div className="mb-4 flex items-start justify-between gap-4">
               <div>
-                <p className="text-xs font-medium text-slate-500">{APP_REVISION}</p>
-                <h2 className="mt-1 text-2xl font-bold text-slate-950">Help & Training Guide</h2>
+                <p className="text-xs font-medium text-slate-500">
+                  {APP_REVISION}
+                </p>
+                <h2 className="mt-1 text-2xl font-bold text-slate-950">
+                  Help & Training Guide
+                </h2>
                 <p className="mt-1 text-sm text-slate-600">
                   A quick guide for using Graymills TaskBoard day to day.
                 </p>
@@ -3367,69 +4300,133 @@ export default function Home() {
 
             <div className="space-y-4">
               <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-                <h3 className="text-sm font-bold text-slate-950">1. Quick Add</h3>
+                <h3 className="text-sm font-bold text-slate-950">
+                  1. Quick Add
+                </h3>
                 <p className="mt-2 text-sm text-slate-600">
-                  Use Quick Add to create a task fast. Enter the task title, choose a project, person, and team, then click Add Task. New tasks start in Backlog.
+                  Use Quick Add to create a task fast. Enter the task title,
+                  choose a project, person, and team, then click Add Task. New
+                  tasks start in Backlog.
                 </p>
               </div>
 
               <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-                <h3 className="text-sm font-bold text-slate-950">2. Board Views</h3>
+                <h3 className="text-sm font-bold text-slate-950">
+                  2. Board Views
+                </h3>
                 <div className="mt-2 space-y-2 text-sm text-slate-600">
-                  <p><span className="font-semibold text-slate-800">Status:</span> workflow view by Backlog, To Do, In Progress, Waiting, Review, and Done.</p>
-                  <p><span className="font-semibold text-slate-800">Assigned To:</span> people-only workload view.</p>
-                  <p><span className="font-semibold text-slate-800">By Team:</span> team-only workload view.</p>
-                  <p><span className="font-semibold text-slate-800">Project:</span> project-by-project planning view.</p>
-                  <p><span className="font-semibold text-slate-800">Calendar:</span> due-date view for Overdue, Today, Tomorrow, Next 7 Days, Later, and No Due Date.</p>
+                  <p>
+                    <span className="font-semibold text-slate-800">
+                      Status:
+                    </span>{" "}
+                    workflow view by Backlog, To Do, In Progress, Waiting,
+                    Review, and Done.
+                  </p>
+                  <p>
+                    <span className="font-semibold text-slate-800">
+                      Assigned To:
+                    </span>{" "}
+                    people-only workload view.
+                  </p>
+                  <p>
+                    <span className="font-semibold text-slate-800">
+                      By Team:
+                    </span>{" "}
+                    team-only workload view.
+                  </p>
+                  <p>
+                    <span className="font-semibold text-slate-800">
+                      Project:
+                    </span>{" "}
+                    project-by-project planning view.
+                  </p>
+                  <p>
+                    <span className="font-semibold text-slate-800">
+                      Calendar:
+                    </span>{" "}
+                    due-date view for Overdue, Today, Tomorrow, Next 7 Days,
+                    Later, and No Due Date.
+                  </p>
                 </div>
               </div>
 
               <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-                <h3 className="text-sm font-bold text-slate-950">3. Drag and Drop</h3>
+                <h3 className="text-sm font-bold text-slate-950">
+                  3. Drag and Drop
+                </h3>
                 <p className="mt-2 text-sm text-slate-600">
-                  Drag cards to change the field represented by the current view. In Status view it changes status. In Assigned To view it changes person assignment. In By Team view it changes team. In Project view it changes project. In Calendar view it changes due date.
+                  Drag cards to change the field represented by the current
+                  view. In Status view it changes status. In Assigned To view it
+                  changes person assignment. In By Team view it changes team. In
+                  Project view it changes project. In Calendar view it changes
+                  due date.
                 </p>
               </div>
 
               <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-                <h3 className="text-sm font-bold text-slate-950">4. Open Card</h3>
+                <h3 className="text-sm font-bold text-slate-950">
+                  4. Open Card
+                </h3>
                 <p className="mt-2 text-sm text-slate-600">
-                  Click Open to edit details, notes, due date, reminder date, priority, project, assignments, comments, attachments, Blitzit copy, and activity history.
+                  Click Open to edit details, notes, due date, reminder date,
+                  priority, project, assignments, comments, attachments, Blitzit
+                  copy, and activity history.
                 </p>
               </div>
 
               <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-                <h3 className="text-sm font-bold text-slate-950">5. Search and Smart Filters</h3>
+                <h3 className="text-sm font-bold text-slate-950">
+                  5. Search and Smart Filters
+                </h3>
                 <p className="mt-2 text-sm text-slate-600">
-                  Use Search to find tasks by title, notes, project, assignee, team, tags, status, priority, due date, or reminder text. Use Smart Filter for common views like My Tasks, Overdue, High Priority, Has Files, or Reminder Due.
+                  Use Search to find tasks by title, notes, project, assignee,
+                  team, tags, status, priority, due date, or reminder text. Use
+                  Smart Filter for common views like My Tasks, Overdue, High
+                  Priority, Has Files, or Reminder Due.
                 </p>
               </div>
 
               <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-                <h3 className="text-sm font-bold text-slate-950">6. Reminders and Notifications</h3>
+                <h3 className="text-sm font-bold text-slate-950">
+                  6. Reminders and Notifications
+                </h3>
                 <p className="mt-2 text-sm text-slate-600">
-                  Reminders are date-only. Open a card to set Tomorrow, 1 Week, End of Week / Friday, or a custom reminder date. Due and overdue reminders appear in the Notifications panel. Email delivery remains pending SMTP setup.
+                  Reminders are date-only. Open a card to set Tomorrow, 1 Week,
+                  End of Week / Friday, or a custom reminder date. Due and
+                  overdue reminders appear in the Notifications panel. Email
+                  delivery remains pending SMTP setup.
                 </p>
               </div>
 
               <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-                <h3 className="text-sm font-bold text-slate-950">7. Files, Comments, and Activity</h3>
+                <h3 className="text-sm font-bold text-slate-950">
+                  7. Files, Comments, and Activity
+                </h3>
                 <p className="mt-2 text-sm text-slate-600">
-                  Attach Word documents, PDFs, images, and other supporting files inside a task. Use Comments for team discussion. Activity shows key changes such as edits, assignment changes, file changes, comments, and Blitzit copies.
+                  Attach Word documents, PDFs, images, and other supporting
+                  files inside a task. Use Comments for team discussion.
+                  Activity shows key changes such as edits, assignment changes,
+                  file changes, comments, and Blitzit copies.
                 </p>
               </div>
 
               <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-                <h3 className="text-sm font-bold text-slate-950">8. Admin Tools</h3>
+                <h3 className="text-sm font-bold text-slate-950">
+                  8. Admin Tools
+                </h3>
                 <p className="mt-2 text-sm text-slate-600">
-                  Admins can manage users, roles, profile colors, projects, teams, backups, and restore previews. Archive/deactivate preserves task history.
+                  Admins can manage users, roles, profile colors, projects,
+                  teams, backups, and restore previews. Archive/deactivate
+                  preserves task history.
                 </p>
               </div>
 
               <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
                 <h3 className="text-sm font-bold text-slate-950">9. Blitzit</h3>
                 <p className="mt-2 text-sm text-slate-600">
-                  Save your Blitzit webhook settings in Settings. Use Copy or Re-copy on a task to send it one-way to Blitzit. This does not sync changes back from Blitzit.
+                  Save your Blitzit webhook settings in Settings. Use Copy or
+                  Re-copy on a task to send it one-way to Blitzit. This does not
+                  sync changes back from Blitzit.
                 </p>
               </div>
             </div>
@@ -3442,10 +4439,15 @@ export default function Home() {
           <div className="h-full w-full max-w-2xl overflow-y-auto border-l border-slate-200 bg-slate-50 p-5 shadow-2xl">
             <div className="mb-4 flex items-start justify-between gap-4">
               <div>
-                <p className="text-xs font-medium text-slate-500">{APP_REVISION}</p>
-                <h2 className="mt-1 text-2xl font-bold text-slate-950">Notifications</h2>
+                <p className="text-xs font-medium text-slate-500">
+                  {APP_REVISION}
+                </p>
+                <h2 className="mt-1 text-2xl font-bold text-slate-950">
+                  Notifications
+                </h2>
                 <p className="mt-1 text-sm text-slate-600">
-                  Reminder notifications appear here when a task reminder is due. Email delivery is pending SMTP setup.
+                  Reminder notifications appear here when a task reminder is
+                  due. Email delivery is pending SMTP setup.
                 </p>
               </div>
               <button
@@ -3466,10 +4468,14 @@ export default function Home() {
             <div className="mb-4 flex flex-wrap gap-2">
               <button
                 type="button"
-                onClick={() => setShowDismissedNotifications((current) => !current)}
+                onClick={() =>
+                  setShowDismissedNotifications((current) => !current)
+                }
                 className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50"
               >
-                {showDismissedNotifications ? "Hide Dismissed" : "Show Dismissed"}
+                {showDismissedNotifications
+                  ? "Hide Dismissed"
+                  : "Show Dismissed"}
               </button>
               <button
                 type="button"
@@ -3487,7 +4493,9 @@ export default function Home() {
                 </div>
               ) : (
                 reminderNotificationTasks.map((task) => {
-                  const dismissed = dismissedNotificationTaskIds.includes(task.id);
+                  const dismissed = dismissedNotificationTaskIds.includes(
+                    task.id,
+                  );
                   return (
                     <div
                       key={task.id}
@@ -3495,13 +4503,20 @@ export default function Home() {
                     >
                       <div className="flex items-start justify-between gap-3">
                         <div>
-                          <p className="text-sm font-bold text-slate-950">{task.title}</p>
-                          <p className={`mt-1 text-xs font-semibold ${reminderIsOverdue(task.reminderAt) ? "text-red-700" : "text-amber-700"}`}>
+                          <p className="text-sm font-bold text-slate-950">
+                            {task.title}
+                          </p>
+                          <p
+                            className={`mt-1 text-xs font-semibold ${reminderIsOverdue(task.reminderAt) ? "text-red-700" : "text-amber-700"}`}
+                          >
                             Reminder: {formatReminderDate(task.reminderAt)}
                             {dismissed ? " · dismissed" : ""}
                           </p>
                           <p className="mt-1 text-xs text-slate-600">
-                            Project: {task.project} · Assigned: {task.assignees.length > 0 ? task.assignees.join(", ") : "Unassigned"}
+                            Project: {task.project} · Assigned:{" "}
+                            {task.assignees.length > 0
+                              ? task.assignees.join(", ")
+                              : "Unassigned"}
                           </p>
                           {task.reminderNote && (
                             <p className="mt-2 rounded-xl bg-slate-50 p-2 text-xs text-slate-600">
@@ -3542,9 +4557,17 @@ export default function Home() {
           <div className="h-full w-full max-w-md overflow-y-auto border-l border-slate-200 bg-white p-5 shadow-2xl">
             <div className="mb-4 flex items-start justify-between gap-4">
               <div>
-                <p className="text-xs font-medium text-slate-500">{APP_REVISION}</p>
-                <h2 className="mt-1 text-2xl font-bold text-slate-950">Settings</h2>
-                <p className="mt-1 text-sm text-slate-600">Database status, Blitzit settings, attachment notes, smart filters, and revision notes live here. The main board now uses a wider, cleaner layout.</p>
+                <p className="text-xs font-medium text-slate-500">
+                  {APP_REVISION}
+                </p>
+                <h2 className="mt-1 text-2xl font-bold text-slate-950">
+                  Settings
+                </h2>
+                <p className="mt-1 text-sm text-slate-600">
+                  Database status, Blitzit settings, attachment notes, smart
+                  filters, and revision notes live here. The main board now uses
+                  a wider, cleaner layout.
+                </p>
               </div>
               <button
                 type="button"
@@ -3555,144 +4578,226 @@ export default function Home() {
               </button>
             </div>
             <div className="space-y-4">
-
-            <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-              <h2 className="text-sm font-semibold text-slate-900">Database Status</h2>
-              <p className="mt-2 text-sm text-slate-600">The board is loading real task records from Supabase.</p>
-              <div className="mt-4 rounded-xl bg-slate-50 p-3 text-sm text-slate-700">
-                <p>Loaded tasks: <span className="font-semibold">{boardTasks.length}</span></p>
-                <p>Filtered tasks: <span className="font-semibold">{filteredBoardTasks.length}</span></p>
-                <p>Active projects: <span className="font-semibold">{projects.length}</span></p>
-                <p>Active teams: <span className="font-semibold">{teams.length}</span></p>
-                <p>People: <span className="font-semibold">{profiles.length}</span></p>
+              <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                <h2 className="text-sm font-semibold text-slate-900">
+                  Database Status
+                </h2>
+                <p className="mt-2 text-sm text-slate-600">
+                  The board is loading real task records from Supabase.
+                </p>
+                <div className="mt-4 rounded-xl bg-slate-50 p-3 text-sm text-slate-700">
+                  <p>
+                    Loaded tasks:{" "}
+                    <span className="font-semibold">{boardTasks.length}</span>
+                  </p>
+                  <p>
+                    Filtered tasks:{" "}
+                    <span className="font-semibold">
+                      {filteredBoardTasks.length}
+                    </span>
+                  </p>
+                  <p>
+                    Active projects:{" "}
+                    <span className="font-semibold">{projects.length}</span>
+                  </p>
+                  <p>
+                    Active teams:{" "}
+                    <span className="font-semibold">{teams.length}</span>
+                  </p>
+                  <p>
+                    People:{" "}
+                    <span className="font-semibold">{profiles.length}</span>
+                  </p>
+                </div>
               </div>
-            </div>
 
-            <form onSubmit={saveBlitzitSettings} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-              <h2 className="text-sm font-semibold text-slate-900">Blitzit Settings</h2>
-              <p className="mt-2 text-sm text-slate-600">
-                Paste your Blitzit list webhook details here. Saved settings now reload automatically when you sign in.
-              </p>
-              <div className="mt-3 space-y-3">
-                <input
-                  className="w-full rounded-xl border border-slate-300 px-3 py-2 text-xs outline-none focus:border-slate-500"
-                  placeholder="Blitzit Webhook URL"
-                  value={blitzitWebhookUrl}
-                  onChange={(event) => setBlitzitWebhookUrl(event.target.value)}
-                />
-                <input
-                  className="w-full rounded-xl border border-slate-300 px-3 py-2 text-xs outline-none focus:border-slate-500"
-                  placeholder="Signing Secret value"
-                  type="password"
-                  value={blitzitSigningSecret}
-                  onChange={(event) => setBlitzitSigningSecret(event.target.value)}
-                />
+              <form
+                onSubmit={saveBlitzitSettings}
+                className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"
+              >
+                <h2 className="text-sm font-semibold text-slate-900">
+                  Blitzit Settings
+                </h2>
+                <p className="mt-2 text-sm text-slate-600">
+                  Paste your Blitzit list webhook details here. Saved settings
+                  now reload automatically when you sign in.
+                </p>
+                <div className="mt-3 space-y-3">
+                  <input
+                    className="w-full rounded-xl border border-slate-300 px-3 py-2 text-xs outline-none focus:border-slate-500"
+                    placeholder="Blitzit Webhook URL"
+                    value={blitzitWebhookUrl}
+                    onChange={(event) =>
+                      setBlitzitWebhookUrl(event.target.value)
+                    }
+                  />
+                  <input
+                    className="w-full rounded-xl border border-slate-300 px-3 py-2 text-xs outline-none focus:border-slate-500"
+                    placeholder="Signing Secret value"
+                    type="password"
+                    value={blitzitSigningSecret}
+                    onChange={(event) =>
+                      setBlitzitSigningSecret(event.target.value)
+                    }
+                  />
+                  <button
+                    type="submit"
+                    disabled={savingBlitzitSettings}
+                    className="w-full rounded-xl bg-slate-950 px-3 py-2 text-sm font-semibold text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-400"
+                  >
+                    {savingBlitzitSettings
+                      ? "Saving..."
+                      : "Save Blitzit Settings"}
+                  </button>
+                </div>
+                {blitzitMessage && (
+                  <div className="mt-3 rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs text-slate-700">
+                    {blitzitMessage}
+                  </div>
+                )}
+              </form>
+
+              <form
+                onSubmit={saveNotificationSettings}
+                className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"
+              >
+                <h2 className="text-sm font-semibold text-slate-900">
+                  Notification Preferences
+                </h2>
+                <p className="mt-2 text-sm text-slate-600">
+                  In-app reminder notifications are live. Email notifications
+                  are saved as a preference, but delivery is paused until IT
+                  configures SMTP.
+                </p>
+                <div className="mt-3 space-y-3 text-sm text-slate-700">
+                  <label className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={inAppNotificationsEnabled}
+                      onChange={(event) =>
+                        setInAppNotificationsEnabled(event.target.checked)
+                      }
+                    />
+                    Enable in-app notifications
+                  </label>
+                  <label className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={reminderDueNotificationsEnabled}
+                      onChange={(event) =>
+                        setReminderDueNotificationsEnabled(event.target.checked)
+                      }
+                    />
+                    Show reminder-due notifications
+                  </label>
+                  <label className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={includeOverdueNotifications}
+                      onChange={(event) =>
+                        setIncludeOverdueNotifications(event.target.checked)
+                      }
+                    />
+                    Include overdue reminders
+                  </label>
+                  <label className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={emailNotificationsEnabled}
+                      onChange={(event) =>
+                        setEmailNotificationsEnabled(event.target.checked)
+                      }
+                    />
+                    Email notifications preferred — pending SMTP setup
+                  </label>
+                </div>
                 <button
                   type="submit"
-                  disabled={savingBlitzitSettings}
-                  className="w-full rounded-xl bg-slate-950 px-3 py-2 text-sm font-semibold text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-400"
+                  disabled={savingNotificationSettings}
+                  className="mt-4 w-full rounded-xl bg-slate-950 px-3 py-2 text-sm font-semibold text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-400"
                 >
-                  {savingBlitzitSettings ? "Saving..." : "Save Blitzit Settings"}
+                  {savingNotificationSettings
+                    ? "Saving..."
+                    : "Save Notification Preferences"}
                 </button>
+                {notificationMessage && (
+                  <div className="mt-3 rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs text-slate-700">
+                    {notificationMessage}
+                  </div>
+                )}
+              </form>
+
+              <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                <h2 className="text-sm font-semibold text-slate-900">
+                  Security / Reliability
+                </h2>
+                <p className="mt-2 text-sm text-slate-600">
+                  Inactive users are now blocked from the app UI. Admin controls
+                  only appear for active admins. Blitzit secrets remain excluded
+                  from backup export/restore.
+                </p>
               </div>
-              {blitzitMessage && (
-                <div className="mt-3 rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs text-slate-700">
-                  {blitzitMessage}
-                </div>
-              )}
-            </form>
 
-            <form onSubmit={saveNotificationSettings} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-              <h2 className="text-sm font-semibold text-slate-900">Notification Preferences</h2>
-              <p className="mt-2 text-sm text-slate-600">
-                In-app reminder notifications are live. Email notifications are saved as a preference, but delivery is paused until IT configures SMTP.
-              </p>
-              <div className="mt-3 space-y-3 text-sm text-slate-700">
-                <label className="flex items-center gap-2">
-                  <input
-                    type="checkbox"
-                    checked={inAppNotificationsEnabled}
-                    onChange={(event) => setInAppNotificationsEnabled(event.target.checked)}
-                  />
-                  Enable in-app notifications
-                </label>
-                <label className="flex items-center gap-2">
-                  <input
-                    type="checkbox"
-                    checked={reminderDueNotificationsEnabled}
-                    onChange={(event) => setReminderDueNotificationsEnabled(event.target.checked)}
-                  />
-                  Show reminder-due notifications
-                </label>
-                <label className="flex items-center gap-2">
-                  <input
-                    type="checkbox"
-                    checked={includeOverdueNotifications}
-                    onChange={(event) => setIncludeOverdueNotifications(event.target.checked)}
-                  />
-                  Include overdue reminders
-                </label>
-                <label className="flex items-center gap-2">
-                  <input
-                    type="checkbox"
-                    checked={emailNotificationsEnabled}
-                    onChange={(event) => setEmailNotificationsEnabled(event.target.checked)}
-                  />
-                  Email notifications preferred — pending SMTP setup
-                </label>
+              <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                <h2 className="text-sm font-semibold text-slate-900">
+                  Activity History
+                </h2>
+                <p className="mt-2 text-sm text-slate-600">
+                  Open a card to see a timeline of important task actions,
+                  including comments, attachments, status moves, edits, and
+                  Blitzit copies.
+                </p>
               </div>
-              <button
-                type="submit"
-                disabled={savingNotificationSettings}
-                className="mt-4 w-full rounded-xl bg-slate-950 px-3 py-2 text-sm font-semibold text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-400"
-              >
-                {savingNotificationSettings ? "Saving..." : "Save Notification Preferences"}
-              </button>
-              {notificationMessage && (
-                <div className="mt-3 rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs text-slate-700">
-                  {notificationMessage}
-                </div>
-              )}
-            </form>
 
-            <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-              <h2 className="text-sm font-semibold text-slate-900">Security / Reliability</h2>
-              <p className="mt-2 text-sm text-slate-600">
-                Inactive users are now blocked from the app UI. Admin controls only appear for active admins. Blitzit secrets remain excluded from backup export/restore.
-              </p>
-            </div>
+              <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                <h2 className="text-sm font-semibold text-slate-900">
+                  File Attachments
+                </h2>
+                <p className="mt-2 text-sm text-slate-600">
+                  Open a card to upload Word docs, PDFs, images, spreadsheets,
+                  or other task files.
+                </p>
+              </div>
 
-            <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-              <h2 className="text-sm font-semibold text-slate-900">Activity History</h2>
-              <p className="mt-2 text-sm text-slate-600">
-                Open a card to see a timeline of important task actions, including comments, attachments, status moves, edits, and Blitzit copies.
-              </p>
-            </div>
+              <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                <h2 className="text-sm font-semibold text-slate-900">
+                  Reminders
+                </h2>
+                <p className="mt-2 text-sm text-slate-600">
+                  Open a card to set a reminder date and reminder notes. Due
+                  reminders now appear in the Notifications panel and can still
+                  be filtered with Has Reminder or Reminder Due.
+                </p>
+              </div>
 
-            <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-              <h2 className="text-sm font-semibold text-slate-900">File Attachments</h2>
-              <p className="mt-2 text-sm text-slate-600">
-                Open a card to upload Word docs, PDFs, images, spreadsheets, or other task files.
-              </p>
-            </div>
-
-            <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-              <h2 className="text-sm font-semibold text-slate-900">Reminders</h2>
-              <p className="mt-2 text-sm text-slate-600">
-                Open a card to set a reminder date and reminder notes. Due reminders now appear in the Notifications panel and can still be filtered with Has Reminder or Reminder Due.
-              </p>
-            </div>
-
-            <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-              <h2 className="text-sm font-semibold text-slate-900">Version 2.3 Scope</h2>
-              <ul className="mt-2 space-y-2 text-sm text-slate-600">
-                <li>• Help button added to the header</li>
-                <li>• Help & Training Guide pop-out added</li>
-                <li>• Quick Add, board views, drag/drop, Open Card, filters, reminders, files, comments, admin, and Blitzit instructions added</li>
-                <li>• Settings, Admin, Notifications, password reset, logo, search, comments, activity, attachments, backup/restore, and board views retained</li>
-              </ul>
-            </div>
-
+              <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                <h2 className="text-sm font-semibold text-slate-900">
+                  Version 2.4 Scope
+                </h2>
+                <ul className="mt-2 space-y-2 text-sm text-slate-600">
+                  <li>• Dashboard button added to the header</li>
+                  <li>• Dashboard & Reporting pop-out added</li>
+                  <li>
+                    • Summary cards for open work, overdue tasks, reminders,
+                    priority, and Blitzit status
+                  </li>
+                  <li>
+                    • Reporting tables by status, priority, project, person, and
+                    team
+                  </li>
+                  <li>• Recently completed task list added</li>
+                  <li>
+                    • Quick Add, board views, drag/drop, Open Card, filters,
+                    reminders, files, comments, admin, and Blitzit instructions
+                    added
+                  </li>
+                  <li>
+                    • Settings, Admin, Notifications, password reset, logo,
+                    search, comments, activity, attachments, backup/restore, and
+                    board views retained
+                  </li>
+                </ul>
+              </div>
             </div>
           </div>
         </div>
@@ -3702,480 +4807,605 @@ export default function Home() {
         <div className="fixed inset-0 z-40 flex justify-end bg-slate-950/40">
           <div className="h-full w-full max-w-6xl overflow-y-auto border-l border-slate-200 bg-slate-50 p-5 shadow-2xl">
             <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
-            <div className="mb-4 flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
-              <div>
-                <h2 className="text-xl font-bold text-slate-950">Admin: Users, Projects & Teams</h2>
-                <p className="text-sm text-slate-600">
-                  Manage users, profile colors, roles, projects, and teams. Archive/deactivate preserves task history.
-                </p>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                <button
-                  type="button"
-                  onClick={refreshAllData}
-                  className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50"
-                >
-                  Refresh Admin Data
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setAdminOpen(false)}
-                  className="rounded-xl bg-slate-950 px-3 py-2 text-xs font-semibold text-white hover:bg-slate-800"
-                >
-                  Close Admin
-                </button>
-              </div>
-            </div>
-
-            {adminMessage && (
-              <div className="mb-4 rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">
-                {adminMessage}
-              </div>
-            )}
-
-            <div className="mb-5 rounded-2xl border border-slate-200 bg-slate-50 p-4">
-              <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
-                <div className="max-w-2xl">
-                  <h3 className="font-bold text-slate-950">Backup / Restore</h3>
-                  <p className="mt-1 text-sm text-slate-600">
-                    Export a JSON backup or restore a previous TaskBoard backup. Restore uses a merge/upsert approach: matching saved IDs are updated, missing records are added, and records not found in the backup are not deleted.
-                  </p>
-                  <p className="mt-1 text-xs text-slate-500">
-                    Blitzit secrets and uploaded file contents are not included. Attachment metadata is included, but file binaries are not restored.
+              <div className="mb-4 flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
+                <div>
+                  <h2 className="text-xl font-bold text-slate-950">
+                    Admin: Users, Projects & Teams
+                  </h2>
+                  <p className="text-sm text-slate-600">
+                    Manage users, profile colors, roles, projects, and teams.
+                    Archive/deactivate preserves task history.
                   </p>
                 </div>
-
-                <div className="flex flex-col gap-2 sm:flex-row">
+                <div className="flex flex-wrap gap-2">
                   <button
                     type="button"
-                    onClick={handleExportBackup}
-                    disabled={exportingBackup || restoringBackup}
-                    className="rounded-xl bg-slate-950 px-4 py-3 text-sm font-semibold text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-400"
+                    onClick={refreshAllData}
+                    className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50"
                   >
-                    {exportingBackup ? "Exporting..." : "Export Backup"}
+                    Refresh Admin Data
                   </button>
-
-                  <label className="cursor-pointer rounded-xl border border-slate-300 bg-white px-4 py-3 text-center text-sm font-semibold text-slate-700 hover:bg-slate-50">
-                    Choose Restore File
-                    <input
-                      type="file"
-                      accept="application/json,.json"
-                      onChange={handleRestoreFileSelected}
-                      className="hidden"
-                    />
-                  </label>
+                  <button
+                    type="button"
+                    onClick={() => setAdminOpen(false)}
+                    className="rounded-xl bg-slate-950 px-3 py-2 text-xs font-semibold text-white hover:bg-slate-800"
+                  >
+                    Close Admin
+                  </button>
                 </div>
               </div>
 
-              {restoreFileName && (
-                <div className="mt-4 rounded-xl border border-blue-200 bg-blue-50 p-3 text-sm text-blue-950">
-                  Restore file selected: <span className="font-semibold">{restoreFileName}</span>
+              {adminMessage && (
+                <div className="mb-4 rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">
+                  {adminMessage}
                 </div>
               )}
 
-              {restorePreview && (
-                <div className="mt-4 rounded-2xl border border-slate-200 bg-white p-4">
-                  <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-                    <div>
-                      <p className="font-semibold text-slate-950">Restore preview</p>
-                      <p className="text-xs text-slate-500">
-                        Review these row counts before restoring. Restore does not delete records that are missing from the backup.
-                      </p>
-                    </div>
-                    <div className="flex gap-2">
-                      <button
-                        type="button"
-                        onClick={handleRestoreBackup}
-                        disabled={restoringBackup}
-                        className="rounded-xl bg-red-700 px-4 py-3 text-sm font-semibold text-white hover:bg-red-800 disabled:cursor-not-allowed disabled:bg-red-300"
-                      >
-                        {restoringBackup ? "Restoring..." : "Restore Backup"}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={clearRestorePreview}
-                        disabled={restoringBackup}
-                        className="rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-50"
-                      >
-                        Cancel Restore
-                      </button>
-                    </div>
+              <div className="mb-5 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+                  <div className="max-w-2xl">
+                    <h3 className="font-bold text-slate-950">
+                      Backup / Restore
+                    </h3>
+                    <p className="mt-1 text-sm text-slate-600">
+                      Export a JSON backup or restore a previous TaskBoard
+                      backup. Restore uses a merge/upsert approach: matching
+                      saved IDs are updated, missing records are added, and
+                      records not found in the backup are not deleted.
+                    </p>
+                    <p className="mt-1 text-xs text-slate-500">
+                      Blitzit secrets and uploaded file contents are not
+                      included. Attachment metadata is included, but file
+                      binaries are not restored.
+                    </p>
                   </div>
 
-                  <div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-                    {Object.entries(restorePreview).map(([tableName, rowCount]) => (
-                      <div key={tableName} className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs text-slate-700">
-                        <p className="font-semibold text-slate-950">{tableName}</p>
-                        <p>{rowCount} rows</p>
+                  <div className="flex flex-col gap-2 sm:flex-row">
+                    <button
+                      type="button"
+                      onClick={handleExportBackup}
+                      disabled={exportingBackup || restoringBackup}
+                      className="rounded-xl bg-slate-950 px-4 py-3 text-sm font-semibold text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-400"
+                    >
+                      {exportingBackup ? "Exporting..." : "Export Backup"}
+                    </button>
+
+                    <label className="cursor-pointer rounded-xl border border-slate-300 bg-white px-4 py-3 text-center text-sm font-semibold text-slate-700 hover:bg-slate-50">
+                      Choose Restore File
+                      <input
+                        type="file"
+                        accept="application/json,.json"
+                        onChange={handleRestoreFileSelected}
+                        className="hidden"
+                      />
+                    </label>
+                  </div>
+                </div>
+
+                {restoreFileName && (
+                  <div className="mt-4 rounded-xl border border-blue-200 bg-blue-50 p-3 text-sm text-blue-950">
+                    Restore file selected:{" "}
+                    <span className="font-semibold">{restoreFileName}</span>
+                  </div>
+                )}
+
+                {restorePreview && (
+                  <div className="mt-4 rounded-2xl border border-slate-200 bg-white p-4">
+                    <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                      <div>
+                        <p className="font-semibold text-slate-950">
+                          Restore preview
+                        </p>
+                        <p className="text-xs text-slate-500">
+                          Review these row counts before restoring. Restore does
+                          not delete records that are missing from the backup.
+                        </p>
+                      </div>
+                      <div className="flex gap-2">
+                        <button
+                          type="button"
+                          onClick={handleRestoreBackup}
+                          disabled={restoringBackup}
+                          className="rounded-xl bg-red-700 px-4 py-3 text-sm font-semibold text-white hover:bg-red-800 disabled:cursor-not-allowed disabled:bg-red-300"
+                        >
+                          {restoringBackup ? "Restoring..." : "Restore Backup"}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={clearRestorePreview}
+                          disabled={restoringBackup}
+                          className="rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+                        >
+                          Cancel Restore
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                      {Object.entries(restorePreview).map(
+                        ([tableName, rowCount]) => (
+                          <div
+                            key={tableName}
+                            className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs text-slate-700"
+                          >
+                            <p className="font-semibold text-slate-950">
+                              {tableName}
+                            </p>
+                            <p>{rowCount} rows</p>
+                          </div>
+                        ),
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {backupMessage && (
+                  <div className="mt-3 rounded-xl border border-slate-200 bg-white p-3 text-sm text-slate-700">
+                    {backupMessage}
+                  </div>
+                )}
+              </div>
+
+              <div className="grid gap-5 xl:grid-cols-3">
+                <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                  <h3 className="font-bold text-slate-950">Users</h3>
+                  <p className="mt-1 text-sm text-slate-600">
+                    Edit display names, roles, profile colors, and active
+                    status.
+                  </p>
+
+                  {editingUserId && (
+                    <form
+                      onSubmit={handleSaveUser}
+                      className="mt-3 space-y-3 rounded-2xl border border-blue-200 bg-blue-50 p-4"
+                    >
+                      <p className="text-sm font-semibold text-blue-950">
+                        Edit user
+                      </p>
+                      <input
+                        className="w-full rounded-xl border border-blue-200 px-4 py-3 text-sm outline-none focus:border-blue-500"
+                        placeholder="Full name"
+                        value={editUserFullName}
+                        onChange={(event) =>
+                          setEditUserFullName(event.target.value)
+                        }
+                      />
+                      <div className="grid gap-3 md:grid-cols-2">
+                        <select
+                          className="rounded-xl border border-blue-200 px-4 py-3 text-sm outline-none focus:border-blue-500"
+                          value={editUserRole}
+                          onChange={(event) =>
+                            setEditUserRole(
+                              event.target.value as "admin" | "member",
+                            )
+                          }
+                        >
+                          <option value="member">Member</option>
+                          <option value="admin">Admin</option>
+                        </select>
+                        <div className="flex items-center gap-3 rounded-xl border border-blue-200 bg-white px-3 py-2">
+                          <input
+                            type="color"
+                            value={editUserColor}
+                            onChange={(event) =>
+                              setEditUserColor(event.target.value)
+                            }
+                            className="h-10 w-14 rounded-lg border border-blue-200"
+                          />
+                          <span className="text-sm text-blue-950">
+                            {editUserColor}
+                          </span>
+                        </div>
+                      </div>
+                      <div className="flex gap-2">
+                        <button className="rounded-xl bg-blue-950 px-4 py-3 text-sm font-semibold text-white hover:bg-blue-900">
+                          Save User
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setEditingUserId("")}
+                          className="rounded-xl border border-blue-200 bg-white px-4 py-3 text-sm font-semibold text-blue-950 hover:bg-blue-50"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </form>
+                  )}
+
+                  <div className="mt-4 space-y-2">
+                    {adminProfiles.map((userProfile) => (
+                      <div
+                        key={userProfile.id}
+                        className={`rounded-xl border p-3 text-sm ${
+                          userProfile.is_active !== false
+                            ? "border-slate-200 bg-white"
+                            : "border-slate-200 bg-slate-100 opacity-70"
+                        }`}
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <span
+                                className="h-3 w-8 rounded-full"
+                                style={{
+                                  backgroundColor:
+                                    userProfile.profile_color || "#2563EB",
+                                }}
+                              />
+                              <p className="font-semibold text-slate-950">
+                                {displayProfileName(userProfile)}
+                              </p>
+                            </div>
+                            <p className="mt-1 text-xs text-slate-500">
+                              {userProfile.email || "No email"}
+                            </p>
+                            <p className="mt-1 text-xs text-slate-500">
+                              Role: {userProfile.role || "member"} ·{" "}
+                              {userProfile.is_active !== false
+                                ? "Active"
+                                : "Inactive"}
+                            </p>
+                          </div>
+                          <div className="flex shrink-0 flex-wrap justify-end gap-2">
+                            <button
+                              type="button"
+                              onClick={() => startEditUser(userProfile)}
+                              className="rounded-lg border border-slate-200 px-2 py-1 text-xs font-semibold hover:bg-slate-50"
+                            >
+                              Edit
+                            </button>
+                            {userProfile.is_active !== false ? (
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  setUserActive(userProfile.id, false)
+                                }
+                                className="rounded-lg border border-red-200 px-2 py-1 text-xs font-semibold text-red-700 hover:bg-red-50"
+                              >
+                                Deactivate
+                              </button>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  setUserActive(userProfile.id, true)
+                                }
+                                className="rounded-lg border border-green-200 px-2 py-1 text-xs font-semibold text-green-700 hover:bg-green-50"
+                              >
+                                Activate
+                              </button>
+                            )}
+                          </div>
+                        </div>
                       </div>
                     ))}
                   </div>
                 </div>
-              )}
 
-              {backupMessage && (
-                <div className="mt-3 rounded-xl border border-slate-200 bg-white p-3 text-sm text-slate-700">
-                  {backupMessage}
-                </div>
-              )}
-            </div>
+                <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                  <h3 className="font-bold text-slate-950">Projects</h3>
 
-            <div className="grid gap-5 xl:grid-cols-3">
-              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                <h3 className="font-bold text-slate-950">Users</h3>
-                <p className="mt-1 text-sm text-slate-600">Edit display names, roles, profile colors, and active status.</p>
-
-                {editingUserId && (
-                  <form onSubmit={handleSaveUser} className="mt-3 space-y-3 rounded-2xl border border-blue-200 bg-blue-50 p-4">
-                    <p className="text-sm font-semibold text-blue-950">Edit user</p>
+                  <form
+                    onSubmit={handleCreateProject}
+                    className="mt-3 space-y-3 rounded-2xl bg-white p-4"
+                  >
+                    <p className="text-sm font-semibold text-slate-900">
+                      Add project
+                    </p>
                     <input
-                      className="w-full rounded-xl border border-blue-200 px-4 py-3 text-sm outline-none focus:border-blue-500"
-                      placeholder="Full name"
-                      value={editUserFullName}
-                      onChange={(event) => setEditUserFullName(event.target.value)}
-                    />
-                    <div className="grid gap-3 md:grid-cols-2">
-                      <select
-                        className="rounded-xl border border-blue-200 px-4 py-3 text-sm outline-none focus:border-blue-500"
-                        value={editUserRole}
-                        onChange={(event) => setEditUserRole(event.target.value as "admin" | "member")}
-                      >
-                        <option value="member">Member</option>
-                        <option value="admin">Admin</option>
-                      </select>
-                      <div className="flex items-center gap-3 rounded-xl border border-blue-200 bg-white px-3 py-2">
-                        <input
-                          type="color"
-                          value={editUserColor}
-                          onChange={(event) => setEditUserColor(event.target.value)}
-                          className="h-10 w-14 rounded-lg border border-blue-200"
-                        />
-                        <span className="text-sm text-blue-950">{editUserColor}</span>
-                      </div>
-                    </div>
-                    <div className="flex gap-2">
-                      <button className="rounded-xl bg-blue-950 px-4 py-3 text-sm font-semibold text-white hover:bg-blue-900">
-                        Save User
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setEditingUserId("")}
-                        className="rounded-xl border border-blue-200 bg-white px-4 py-3 text-sm font-semibold text-blue-950 hover:bg-blue-50"
-                      >
-                        Cancel
-                      </button>
-                    </div>
-                  </form>
-                )}
-
-                <div className="mt-4 space-y-2">
-                  {adminProfiles.map((userProfile) => (
-                    <div
-                      key={userProfile.id}
-                      className={`rounded-xl border p-3 text-sm ${
-                        userProfile.is_active !== false
-                          ? "border-slate-200 bg-white"
-                          : "border-slate-200 bg-slate-100 opacity-70"
-                      }`}
-                    >
-                      <div className="flex items-start justify-between gap-3">
-                        <div>
-                          <div className="flex items-center gap-2">
-                            <span
-                              className="h-3 w-8 rounded-full"
-                              style={{ backgroundColor: userProfile.profile_color || "#2563EB" }}
-                            />
-                            <p className="font-semibold text-slate-950">
-                              {displayProfileName(userProfile)}
-                            </p>
-                          </div>
-                          <p className="mt-1 text-xs text-slate-500">
-                            {userProfile.email || "No email"}
-                          </p>
-                          <p className="mt-1 text-xs text-slate-500">
-                            Role: {userProfile.role || "member"} · {userProfile.is_active !== false ? "Active" : "Inactive"}
-                          </p>
-                        </div>
-                        <div className="flex shrink-0 flex-wrap justify-end gap-2">
-                          <button
-                            type="button"
-                            onClick={() => startEditUser(userProfile)}
-                            className="rounded-lg border border-slate-200 px-2 py-1 text-xs font-semibold hover:bg-slate-50"
-                          >
-                            Edit
-                          </button>
-                          {userProfile.is_active !== false ? (
-                            <button
-                              type="button"
-                              onClick={() => setUserActive(userProfile.id, false)}
-                              className="rounded-lg border border-red-200 px-2 py-1 text-xs font-semibold text-red-700 hover:bg-red-50"
-                            >
-                              Deactivate
-                            </button>
-                          ) : (
-                            <button
-                              type="button"
-                              onClick={() => setUserActive(userProfile.id, true)}
-                              className="rounded-lg border border-green-200 px-2 py-1 text-xs font-semibold text-green-700 hover:bg-green-50"
-                            >
-                              Activate
-                            </button>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                <h3 className="font-bold text-slate-950">Projects</h3>
-
-                <form onSubmit={handleCreateProject} className="mt-3 space-y-3 rounded-2xl bg-white p-4">
-                  <p className="text-sm font-semibold text-slate-900">Add project</p>
-                  <input
-                    className="w-full rounded-xl border border-slate-300 px-4 py-3 text-sm outline-none focus:border-slate-500"
-                    placeholder="Project name"
-                    value={newProjectName}
-                    onChange={(event) => setNewProjectName(event.target.value)}
-                  />
-                  <textarea
-                    className="min-h-20 w-full rounded-xl border border-slate-300 px-4 py-3 text-sm outline-none focus:border-slate-500"
-                    placeholder="Project description"
-                    value={newProjectDescription}
-                    onChange={(event) => setNewProjectDescription(event.target.value)}
-                  />
-                  <div className="grid gap-3 md:grid-cols-2">
-                    <select
-                      className="rounded-xl border border-slate-300 px-4 py-3 text-sm outline-none focus:border-slate-500"
-                      value={newProjectStatus}
-                      onChange={(event) => setNewProjectStatus(event.target.value)}
-                    >
-                      <option value="planning">Planning</option>
-                      <option value="active">Active</option>
-                      <option value="paused">Paused</option>
-                      <option value="completed">Completed</option>
-                    </select>
-                    <input
-                      type="date"
-                      className="rounded-xl border border-slate-300 px-4 py-3 text-sm outline-none focus:border-slate-500"
-                      value={newProjectTargetDate}
-                      onChange={(event) => setNewProjectTargetDate(event.target.value)}
-                    />
-                  </div>
-                  <button className="rounded-xl bg-slate-950 px-4 py-3 text-sm font-semibold text-white hover:bg-slate-800">
-                    Add Project
-                  </button>
-                </form>
-
-                {editingProjectId && (
-                  <form onSubmit={handleSaveProject} className="mt-3 space-y-3 rounded-2xl border border-blue-200 bg-blue-50 p-4">
-                    <p className="text-sm font-semibold text-blue-950">Edit project</p>
-                    <input
-                      className="w-full rounded-xl border border-blue-200 px-4 py-3 text-sm outline-none focus:border-blue-500"
-                      value={editProjectName}
-                      onChange={(event) => setEditProjectName(event.target.value)}
+                      className="w-full rounded-xl border border-slate-300 px-4 py-3 text-sm outline-none focus:border-slate-500"
+                      placeholder="Project name"
+                      value={newProjectName}
+                      onChange={(event) =>
+                        setNewProjectName(event.target.value)
+                      }
                     />
                     <textarea
-                      className="min-h-20 w-full rounded-xl border border-blue-200 px-4 py-3 text-sm outline-none focus:border-blue-500"
-                      value={editProjectDescription}
-                      onChange={(event) => setEditProjectDescription(event.target.value)}
+                      className="min-h-20 w-full rounded-xl border border-slate-300 px-4 py-3 text-sm outline-none focus:border-slate-500"
+                      placeholder="Project description"
+                      value={newProjectDescription}
+                      onChange={(event) =>
+                        setNewProjectDescription(event.target.value)
+                      }
                     />
                     <div className="grid gap-3 md:grid-cols-2">
                       <select
-                        className="rounded-xl border border-blue-200 px-4 py-3 text-sm outline-none focus:border-blue-500"
-                        value={editProjectStatus}
-                        onChange={(event) => setEditProjectStatus(event.target.value)}
+                        className="rounded-xl border border-slate-300 px-4 py-3 text-sm outline-none focus:border-slate-500"
+                        value={newProjectStatus}
+                        onChange={(event) =>
+                          setNewProjectStatus(event.target.value)
+                        }
                       >
                         <option value="planning">Planning</option>
                         <option value="active">Active</option>
                         <option value="paused">Paused</option>
                         <option value="completed">Completed</option>
-                        <option value="archived">Archived</option>
                       </select>
                       <input
                         type="date"
-                        className="rounded-xl border border-blue-200 px-4 py-3 text-sm outline-none focus:border-blue-500"
-                        value={editProjectTargetDate}
-                        onChange={(event) => setEditProjectTargetDate(event.target.value)}
+                        className="rounded-xl border border-slate-300 px-4 py-3 text-sm outline-none focus:border-slate-500"
+                        value={newProjectTargetDate}
+                        onChange={(event) =>
+                          setNewProjectTargetDate(event.target.value)
+                        }
                       />
                     </div>
-                    <div className="flex gap-2">
-                      <button className="rounded-xl bg-blue-950 px-4 py-3 text-sm font-semibold text-white hover:bg-blue-900">Save Project</button>
-                      <button
-                        type="button"
-                        onClick={() => setEditingProjectId("")}
-                        className="rounded-xl border border-blue-200 bg-white px-4 py-3 text-sm font-semibold text-blue-950 hover:bg-blue-50"
-                      >
-                        Cancel
-                      </button>
-                    </div>
+                    <button className="rounded-xl bg-slate-950 px-4 py-3 text-sm font-semibold text-white hover:bg-slate-800">
+                      Add Project
+                    </button>
                   </form>
-                )}
 
-                <div className="mt-4 space-y-2">
-                  {adminProjects.map((project) => (
-                    <div
-                      key={project.id}
-                      className={`rounded-xl border p-3 text-sm ${
-                        project.is_active ? "border-slate-200 bg-white" : "border-slate-200 bg-slate-100 opacity-70"
-                      }`}
+                  {editingProjectId && (
+                    <form
+                      onSubmit={handleSaveProject}
+                      className="mt-3 space-y-3 rounded-2xl border border-blue-200 bg-blue-50 p-4"
                     >
-                      <div className="flex items-start justify-between gap-3">
-                        <div>
-                          <p className="font-semibold text-slate-950">{project.name}</p>
-                          <p className="text-xs text-slate-500">
-                            Status: {project.status || "active"} · {project.is_active ? "Active" : "Archived"}
-                          </p>
-                          {project.description && <p className="mt-1 text-xs text-slate-600">{project.description}</p>}
-                        </div>
-                        <div className="flex shrink-0 gap-2">
-                          <button
-                            type="button"
-                            onClick={() => startEditProject(project)}
-                            className="rounded-lg border border-slate-200 px-2 py-1 text-xs font-semibold hover:bg-slate-50"
-                          >
-                            Edit
-                          </button>
-                          {project.is_active ? (
+                      <p className="text-sm font-semibold text-blue-950">
+                        Edit project
+                      </p>
+                      <input
+                        className="w-full rounded-xl border border-blue-200 px-4 py-3 text-sm outline-none focus:border-blue-500"
+                        value={editProjectName}
+                        onChange={(event) =>
+                          setEditProjectName(event.target.value)
+                        }
+                      />
+                      <textarea
+                        className="min-h-20 w-full rounded-xl border border-blue-200 px-4 py-3 text-sm outline-none focus:border-blue-500"
+                        value={editProjectDescription}
+                        onChange={(event) =>
+                          setEditProjectDescription(event.target.value)
+                        }
+                      />
+                      <div className="grid gap-3 md:grid-cols-2">
+                        <select
+                          className="rounded-xl border border-blue-200 px-4 py-3 text-sm outline-none focus:border-blue-500"
+                          value={editProjectStatus}
+                          onChange={(event) =>
+                            setEditProjectStatus(event.target.value)
+                          }
+                        >
+                          <option value="planning">Planning</option>
+                          <option value="active">Active</option>
+                          <option value="paused">Paused</option>
+                          <option value="completed">Completed</option>
+                          <option value="archived">Archived</option>
+                        </select>
+                        <input
+                          type="date"
+                          className="rounded-xl border border-blue-200 px-4 py-3 text-sm outline-none focus:border-blue-500"
+                          value={editProjectTargetDate}
+                          onChange={(event) =>
+                            setEditProjectTargetDate(event.target.value)
+                          }
+                        />
+                      </div>
+                      <div className="flex gap-2">
+                        <button className="rounded-xl bg-blue-950 px-4 py-3 text-sm font-semibold text-white hover:bg-blue-900">
+                          Save Project
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setEditingProjectId("")}
+                          className="rounded-xl border border-blue-200 bg-white px-4 py-3 text-sm font-semibold text-blue-950 hover:bg-blue-50"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </form>
+                  )}
+
+                  <div className="mt-4 space-y-2">
+                    {adminProjects.map((project) => (
+                      <div
+                        key={project.id}
+                        className={`rounded-xl border p-3 text-sm ${
+                          project.is_active
+                            ? "border-slate-200 bg-white"
+                            : "border-slate-200 bg-slate-100 opacity-70"
+                        }`}
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <div>
+                            <p className="font-semibold text-slate-950">
+                              {project.name}
+                            </p>
+                            <p className="text-xs text-slate-500">
+                              Status: {project.status || "active"} ·{" "}
+                              {project.is_active ? "Active" : "Archived"}
+                            </p>
+                            {project.description && (
+                              <p className="mt-1 text-xs text-slate-600">
+                                {project.description}
+                              </p>
+                            )}
+                          </div>
+                          <div className="flex shrink-0 gap-2">
                             <button
                               type="button"
-                              onClick={() => archiveProject(project.id)}
-                              className="rounded-lg border border-red-200 px-2 py-1 text-xs font-semibold text-red-700 hover:bg-red-50"
+                              onClick={() => startEditProject(project)}
+                              className="rounded-lg border border-slate-200 px-2 py-1 text-xs font-semibold hover:bg-slate-50"
                             >
-                              Archive
+                              Edit
                             </button>
-                          ) : (
-                            <button
-                              type="button"
-                              onClick={() => restoreProject(project.id)}
-                              className="rounded-lg border border-green-200 px-2 py-1 text-xs font-semibold text-green-700 hover:bg-green-50"
-                            >
-                              Restore
-                            </button>
-                          )}
+                            {project.is_active ? (
+                              <button
+                                type="button"
+                                onClick={() => archiveProject(project.id)}
+                                className="rounded-lg border border-red-200 px-2 py-1 text-xs font-semibold text-red-700 hover:bg-red-50"
+                              >
+                                Archive
+                              </button>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => restoreProject(project.id)}
+                                className="rounded-lg border border-green-200 px-2 py-1 text-xs font-semibold text-green-700 hover:bg-green-50"
+                              >
+                                Restore
+                              </button>
+                            )}
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                <h3 className="font-bold text-slate-950">Teams</h3>
-
-                <form onSubmit={handleCreateTeam} className="mt-3 space-y-3 rounded-2xl bg-white p-4">
-                  <p className="text-sm font-semibold text-slate-900">Add team</p>
-                  <input
-                    className="w-full rounded-xl border border-slate-300 px-4 py-3 text-sm outline-none focus:border-slate-500"
-                    placeholder="Team name"
-                    value={newTeamName}
-                    onChange={(event) => setNewTeamName(event.target.value)}
-                  />
-                  <textarea
-                    className="min-h-20 w-full rounded-xl border border-slate-300 px-4 py-3 text-sm outline-none focus:border-slate-500"
-                    placeholder="Team description"
-                    value={newTeamDescription}
-                    onChange={(event) => setNewTeamDescription(event.target.value)}
-                  />
-                  <div className="flex items-center gap-3">
-                    <input
-                      type="color"
-                      value={newTeamColor}
-                      onChange={(event) => setNewTeamColor(event.target.value)}
-                      className="h-11 w-16 rounded-lg border border-slate-300"
-                    />
-                    <span className="text-sm text-slate-600">Team color: {newTeamColor}</span>
+                    ))}
                   </div>
-                  <button className="rounded-xl bg-slate-950 px-4 py-3 text-sm font-semibold text-white hover:bg-slate-800">
-                    Add Team
-                  </button>
-                </form>
+                </div>
 
-                {editingTeamId && (
-                  <form onSubmit={handleSaveTeam} className="mt-3 space-y-3 rounded-2xl border border-blue-200 bg-blue-50 p-4">
-                    <p className="text-sm font-semibold text-blue-950">Edit team</p>
+                <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                  <h3 className="font-bold text-slate-950">Teams</h3>
+
+                  <form
+                    onSubmit={handleCreateTeam}
+                    className="mt-3 space-y-3 rounded-2xl bg-white p-4"
+                  >
+                    <p className="text-sm font-semibold text-slate-900">
+                      Add team
+                    </p>
                     <input
-                      className="w-full rounded-xl border border-blue-200 px-4 py-3 text-sm outline-none focus:border-blue-500"
-                      value={editTeamName}
-                      onChange={(event) => setEditTeamName(event.target.value)}
+                      className="w-full rounded-xl border border-slate-300 px-4 py-3 text-sm outline-none focus:border-slate-500"
+                      placeholder="Team name"
+                      value={newTeamName}
+                      onChange={(event) => setNewTeamName(event.target.value)}
                     />
                     <textarea
-                      className="min-h-20 w-full rounded-xl border border-blue-200 px-4 py-3 text-sm outline-none focus:border-blue-500"
-                      value={editTeamDescription}
-                      onChange={(event) => setEditTeamDescription(event.target.value)}
+                      className="min-h-20 w-full rounded-xl border border-slate-300 px-4 py-3 text-sm outline-none focus:border-slate-500"
+                      placeholder="Team description"
+                      value={newTeamDescription}
+                      onChange={(event) =>
+                        setNewTeamDescription(event.target.value)
+                      }
                     />
                     <div className="flex items-center gap-3">
                       <input
                         type="color"
-                        value={editTeamColor}
-                        onChange={(event) => setEditTeamColor(event.target.value)}
-                        className="h-11 w-16 rounded-lg border border-blue-200"
+                        value={newTeamColor}
+                        onChange={(event) =>
+                          setNewTeamColor(event.target.value)
+                        }
+                        className="h-11 w-16 rounded-lg border border-slate-300"
                       />
-                      <span className="text-sm text-blue-950">Team color: {editTeamColor}</span>
+                      <span className="text-sm text-slate-600">
+                        Team color: {newTeamColor}
+                      </span>
                     </div>
-                    <div className="flex gap-2">
-                      <button className="rounded-xl bg-blue-950 px-4 py-3 text-sm font-semibold text-white hover:bg-blue-900">Save Team</button>
-                      <button
-                        type="button"
-                        onClick={() => setEditingTeamId("")}
-                        className="rounded-xl border border-blue-200 bg-white px-4 py-3 text-sm font-semibold text-blue-950 hover:bg-blue-50"
-                      >
-                        Cancel
-                      </button>
-                    </div>
+                    <button className="rounded-xl bg-slate-950 px-4 py-3 text-sm font-semibold text-white hover:bg-slate-800">
+                      Add Team
+                    </button>
                   </form>
-                )}
 
-                <div className="mt-4 space-y-2">
-                  {adminTeams.map((team) => (
-                    <div
-                      key={team.id}
-                      className={`rounded-xl border p-3 text-sm ${
-                        team.is_active ? "border-slate-200 bg-white" : "border-slate-200 bg-slate-100 opacity-70"
-                      }`}
+                  {editingTeamId && (
+                    <form
+                      onSubmit={handleSaveTeam}
+                      className="mt-3 space-y-3 rounded-2xl border border-blue-200 bg-blue-50 p-4"
                     >
-                      <div className="flex items-start justify-between gap-3">
-                        <div>
-                          <div className="flex items-center gap-2">
-                            <span className="h-3 w-8 rounded-full" style={{ backgroundColor: team.team_color }} />
-                            <p className="font-semibold text-slate-950">{team.name}</p>
+                      <p className="text-sm font-semibold text-blue-950">
+                        Edit team
+                      </p>
+                      <input
+                        className="w-full rounded-xl border border-blue-200 px-4 py-3 text-sm outline-none focus:border-blue-500"
+                        value={editTeamName}
+                        onChange={(event) =>
+                          setEditTeamName(event.target.value)
+                        }
+                      />
+                      <textarea
+                        className="min-h-20 w-full rounded-xl border border-blue-200 px-4 py-3 text-sm outline-none focus:border-blue-500"
+                        value={editTeamDescription}
+                        onChange={(event) =>
+                          setEditTeamDescription(event.target.value)
+                        }
+                      />
+                      <div className="flex items-center gap-3">
+                        <input
+                          type="color"
+                          value={editTeamColor}
+                          onChange={(event) =>
+                            setEditTeamColor(event.target.value)
+                          }
+                          className="h-11 w-16 rounded-lg border border-blue-200"
+                        />
+                        <span className="text-sm text-blue-950">
+                          Team color: {editTeamColor}
+                        </span>
+                      </div>
+                      <div className="flex gap-2">
+                        <button className="rounded-xl bg-blue-950 px-4 py-3 text-sm font-semibold text-white hover:bg-blue-900">
+                          Save Team
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setEditingTeamId("")}
+                          className="rounded-xl border border-blue-200 bg-white px-4 py-3 text-sm font-semibold text-blue-950 hover:bg-blue-50"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </form>
+                  )}
+
+                  <div className="mt-4 space-y-2">
+                    {adminTeams.map((team) => (
+                      <div
+                        key={team.id}
+                        className={`rounded-xl border p-3 text-sm ${
+                          team.is_active
+                            ? "border-slate-200 bg-white"
+                            : "border-slate-200 bg-slate-100 opacity-70"
+                        }`}
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <span
+                                className="h-3 w-8 rounded-full"
+                                style={{ backgroundColor: team.team_color }}
+                              />
+                              <p className="font-semibold text-slate-950">
+                                {team.name}
+                              </p>
+                            </div>
+                            <p className="mt-1 text-xs text-slate-500">
+                              {team.is_active ? "Active" : "Archived"}
+                            </p>
+                            {team.description && (
+                              <p className="mt-1 text-xs text-slate-600">
+                                {team.description}
+                              </p>
+                            )}
                           </div>
-                          <p className="mt-1 text-xs text-slate-500">{team.is_active ? "Active" : "Archived"}</p>
-                          {team.description && <p className="mt-1 text-xs text-slate-600">{team.description}</p>}
-                        </div>
-                        <div className="flex shrink-0 gap-2">
-                          <button
-                            type="button"
-                            onClick={() => startEditTeam(team)}
-                            className="rounded-lg border border-slate-200 px-2 py-1 text-xs font-semibold hover:bg-slate-50"
-                          >
-                            Edit
-                          </button>
-                          {team.is_active ? (
+                          <div className="flex shrink-0 gap-2">
                             <button
                               type="button"
-                              onClick={() => archiveTeam(team.id)}
-                              className="rounded-lg border border-red-200 px-2 py-1 text-xs font-semibold text-red-700 hover:bg-red-50"
+                              onClick={() => startEditTeam(team)}
+                              className="rounded-lg border border-slate-200 px-2 py-1 text-xs font-semibold hover:bg-slate-50"
                             >
-                              Archive
+                              Edit
                             </button>
-                          ) : (
-                            <button
-                              type="button"
-                              onClick={() => restoreTeam(team.id)}
-                              className="rounded-lg border border-green-200 px-2 py-1 text-xs font-semibold text-green-700 hover:bg-green-50"
-                            >
-                              Restore
-                            </button>
-                          )}
+                            {team.is_active ? (
+                              <button
+                                type="button"
+                                onClick={() => archiveTeam(team.id)}
+                                className="rounded-lg border border-red-200 px-2 py-1 text-xs font-semibold text-red-700 hover:bg-red-50"
+                              >
+                                Archive
+                              </button>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => restoreTeam(team.id)}
+                                className="rounded-lg border border-green-200 px-2 py-1 text-xs font-semibold text-green-700 hover:bg-green-50"
+                              >
+                                Restore
+                              </button>
+                            )}
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  ))}
+                    ))}
+                  </div>
                 </div>
               </div>
-            </div>
             </section>
           </div>
         </div>
@@ -4186,8 +5416,12 @@ export default function Home() {
           <div className="max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-3xl border border-slate-200 bg-white p-6 shadow-xl">
             <div className="mb-5 flex items-start justify-between gap-4">
               <div>
-                <p className="text-xs font-medium text-slate-500">Editing task</p>
-                <h2 className="mt-1 text-2xl font-bold text-slate-950">Open Card</h2>
+                <p className="text-xs font-medium text-slate-500">
+                  Editing task
+                </p>
+                <h2 className="mt-1 text-2xl font-bold text-slate-950">
+                  Open Card
+                </h2>
               </div>
               <button
                 type="button"
@@ -4200,7 +5434,9 @@ export default function Home() {
 
             <form onSubmit={saveTaskEdits} className="space-y-4">
               <div>
-                <label className="text-sm font-semibold text-slate-900">Task title</label>
+                <label className="text-sm font-semibold text-slate-900">
+                  Task title
+                </label>
                 <input
                   className="mt-1 w-full rounded-xl border border-slate-300 px-4 py-3 text-sm outline-none focus:border-slate-500"
                   value={editTitle}
@@ -4209,7 +5445,9 @@ export default function Home() {
               </div>
 
               <div>
-                <label className="text-sm font-semibold text-slate-900">Notes / description</label>
+                <label className="text-sm font-semibold text-slate-900">
+                  Notes / description
+                </label>
                 <textarea
                   className="mt-1 min-h-32 w-full rounded-xl border border-slate-300 px-4 py-3 text-sm outline-none focus:border-slate-500"
                   value={editDescription}
@@ -4219,22 +5457,32 @@ export default function Home() {
               </div>
 
               <div>
-                <label className="text-sm font-semibold text-slate-900">Project</label>
+                <label className="text-sm font-semibold text-slate-900">
+                  Project
+                </label>
                 <select
                   className="mt-1 w-full rounded-xl border border-slate-300 px-4 py-3 text-sm outline-none focus:border-slate-500"
                   value={editProjectId}
                   onChange={(event) => setEditProjectId(event.target.value)}
                 >
                   <option value="">No project</option>
-                  {projects.map((project) => <option key={project.id} value={project.id}>{project.name}</option>)}
+                  {projects.map((project) => (
+                    <option key={project.id} value={project.id}>
+                      {project.name}
+                    </option>
+                  ))}
                 </select>
               </div>
 
               <div className="grid gap-4 md:grid-cols-2">
                 <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
                   <div className="flex items-center justify-between gap-3">
-                    <label className="text-sm font-semibold text-slate-900">Assign people</label>
-                    <span className="text-xs text-slate-500">{editProfileIds.length} selected</span>
+                    <label className="text-sm font-semibold text-slate-900">
+                      Assign people
+                    </label>
+                    <span className="text-xs text-slate-500">
+                      {editProfileIds.length} selected
+                    </span>
                   </div>
                   <div className="mt-3 max-h-56 space-y-2 overflow-y-auto pr-1">
                     {profiles.map((profileOption) => (
@@ -4250,7 +5498,10 @@ export default function Home() {
                         />
                         <span
                           className="h-3 w-6 rounded-full"
-                          style={{ backgroundColor: profileOption.profile_color || "#2563EB" }}
+                          style={{
+                            backgroundColor:
+                              profileOption.profile_color || "#2563EB",
+                          }}
                         />
                         <span>{displayProfileName(profileOption)}</span>
                       </label>
@@ -4260,8 +5511,12 @@ export default function Home() {
 
                 <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
                   <div className="flex items-center justify-between gap-3">
-                    <label className="text-sm font-semibold text-slate-900">Assign teams</label>
-                    <span className="text-xs text-slate-500">{editTeamIds.length} selected</span>
+                    <label className="text-sm font-semibold text-slate-900">
+                      Assign teams
+                    </label>
+                    <span className="text-xs text-slate-500">
+                      {editTeamIds.length} selected
+                    </span>
                   </div>
                   <div className="mt-3 max-h-56 space-y-2 overflow-y-auto pr-1">
                     {teams.map((team) => (
@@ -4277,7 +5532,9 @@ export default function Home() {
                         />
                         <span
                           className="h-3 w-6 rounded-full"
-                          style={{ backgroundColor: team.team_color || "#F97316" }}
+                          style={{
+                            backgroundColor: team.team_color || "#F97316",
+                          }}
                         />
                         <span>{team.name}</span>
                       </label>
@@ -4288,7 +5545,9 @@ export default function Home() {
 
               <div className="grid gap-4 md:grid-cols-3">
                 <div>
-                  <label className="text-sm font-semibold text-slate-900">Priority</label>
+                  <label className="text-sm font-semibold text-slate-900">
+                    Priority
+                  </label>
                   <select
                     className="mt-1 w-full rounded-xl border border-slate-300 px-4 py-3 text-sm outline-none focus:border-slate-500"
                     value={editPriority}
@@ -4302,7 +5561,9 @@ export default function Home() {
                 </div>
 
                 <div>
-                  <label className="text-sm font-semibold text-slate-900">Status</label>
+                  <label className="text-sm font-semibold text-slate-900">
+                    Status
+                  </label>
                   <select
                     className="mt-1 w-full rounded-xl border border-slate-300 px-4 py-3 text-sm outline-none focus:border-slate-500"
                     value={editStatus}
@@ -4319,7 +5580,9 @@ export default function Home() {
                 </div>
 
                 <div>
-                  <label className="text-sm font-semibold text-slate-900">Due date</label>
+                  <label className="text-sm font-semibold text-slate-900">
+                    Due date
+                  </label>
                   <input
                     type="date"
                     className="mt-1 w-full rounded-xl border border-slate-300 px-4 py-3 text-sm outline-none focus:border-slate-500"
@@ -4332,17 +5595,23 @@ export default function Home() {
               <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
                 <div className="grid gap-4 md:grid-cols-[1fr_2fr]">
                   <div>
-                    <label className="text-sm font-semibold text-slate-900">Reminder date</label>
+                    <label className="text-sm font-semibold text-slate-900">
+                      Reminder date
+                    </label>
                     <input
                       type="date"
                       className="mt-1 w-full rounded-xl border border-slate-300 px-4 py-3 text-sm outline-none focus:border-slate-500"
                       value={editReminderAt}
-                      onChange={(event) => setEditReminderAt(event.target.value)}
+                      onChange={(event) =>
+                        setEditReminderAt(event.target.value)
+                      }
                     />
                     <div className="mt-2 flex flex-wrap gap-2">
                       <button
                         type="button"
-                        onClick={() => setEditReminderAt(getTomorrowDateInput())}
+                        onClick={() =>
+                          setEditReminderAt(getTomorrowDateInput())
+                        }
                         className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50"
                       >
                         Tomorrow
@@ -4356,7 +5625,9 @@ export default function Home() {
                       </button>
                       <button
                         type="button"
-                        onClick={() => setEditReminderAt(getEndOfWeekFridayDateInput())}
+                        onClick={() =>
+                          setEditReminderAt(getEndOfWeekFridayDateInput())
+                        }
                         className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50"
                       >
                         End of Week / Friday
@@ -4372,22 +5643,30 @@ export default function Home() {
                       )}
                     </div>
                     <p className="mt-2 text-xs text-slate-500">
-                      This stores reminder intent by date only. Actual email/push delivery can be added later.
+                      This stores reminder intent by date only. Actual
+                      email/push delivery can be added later.
                     </p>
                   </div>
                   <div>
-                    <label className="text-sm font-semibold text-slate-900">Reminder notes</label>
+                    <label className="text-sm font-semibold text-slate-900">
+                      Reminder notes
+                    </label>
                     <textarea
                       className="mt-1 min-h-24 w-full rounded-xl border border-slate-300 px-4 py-3 text-sm outline-none focus:border-slate-500"
                       value={editReminderNote}
-                      onChange={(event) => setEditReminderNote(event.target.value)}
+                      onChange={(event) =>
+                        setEditReminderNote(event.target.value)
+                      }
                       placeholder="Example: Follow up before the launch meeting."
                     />
                   </div>
                 </div>
                 {selectedTask.reminderAt && (
-                  <p className={`mt-3 rounded-xl border px-3 py-2 text-sm ${reminderIsDue(selectedTask.reminderAt) ? "border-red-200 bg-red-50 text-red-800" : "border-slate-200 bg-white text-slate-600"}`}>
-                    Current reminder: {formatReminderDate(selectedTask.reminderAt)}
+                  <p
+                    className={`mt-3 rounded-xl border px-3 py-2 text-sm ${reminderIsDue(selectedTask.reminderAt) ? "border-red-200 bg-red-50 text-red-800" : "border-slate-200 bg-white text-slate-600"}`}
+                  >
+                    Current reminder:{" "}
+                    {formatReminderDate(selectedTask.reminderAt)}
                   </p>
                 )}
               </div>
@@ -4431,7 +5710,8 @@ export default function Home() {
                 />
                 <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
                   <p className="text-xs text-slate-500">
-                    Comments are saved to this task and visible to users who can view the task.
+                    Comments are saved to this task and visible to users who can
+                    view the task.
                   </p>
                   <button
                     type="submit"
@@ -4456,14 +5736,21 @@ export default function Home() {
                   </div>
                 ) : (
                   comments.map((comment) => (
-                    <div key={comment.id} className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm">
+                    <div
+                      key={comment.id}
+                      className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm"
+                    >
                       <div className="flex flex-col gap-1 md:flex-row md:items-center md:justify-between">
-                        <p className="font-semibold text-slate-950">{comment.commenter_name || "Unknown user"}</p>
+                        <p className="font-semibold text-slate-950">
+                          {comment.commenter_name || "Unknown user"}
+                        </p>
                         <p className="text-xs text-slate-500">
                           {new Date(comment.created_at).toLocaleString()}
                         </p>
                       </div>
-                      <p className="mt-2 whitespace-pre-wrap text-slate-700">{comment.comment_text}</p>
+                      <p className="mt-2 whitespace-pre-wrap text-slate-700">
+                        {comment.comment_text}
+                      </p>
                     </div>
                   ))
                 )}
@@ -4489,15 +5776,24 @@ export default function Home() {
                   </div>
                 ) : (
                   activities.map((activity) => (
-                    <div key={activity.id} className="rounded-xl border border-slate-200 bg-white p-3 text-sm">
+                    <div
+                      key={activity.id}
+                      className="rounded-xl border border-slate-200 bg-white p-3 text-sm"
+                    >
                       <div className="flex flex-col gap-1 md:flex-row md:items-center md:justify-between">
-                        <p className="font-semibold text-slate-950">{activity.actor_name || "System"}</p>
+                        <p className="font-semibold text-slate-950">
+                          {activity.actor_name || "System"}
+                        </p>
                         <p className="text-xs text-slate-500">
                           {new Date(activity.created_at).toLocaleString()}
                         </p>
                       </div>
-                      <p className="mt-2 whitespace-pre-wrap text-slate-700">{activity.activity_text}</p>
-                      <p className="mt-1 text-xs uppercase tracking-wide text-slate-400">{activity.activity_type.replaceAll("_", " ")}</p>
+                      <p className="mt-2 whitespace-pre-wrap text-slate-700">
+                        {activity.activity_text}
+                      </p>
+                      <p className="mt-1 text-xs uppercase tracking-wide text-slate-400">
+                        {activity.activity_type.replaceAll("_", " ")}
+                      </p>
                     </div>
                   ))
                 )}
@@ -4507,7 +5803,8 @@ export default function Home() {
             <section className="mt-6 border-t border-slate-200 pt-5">
               <h3 className="text-lg font-bold text-slate-950">Attachments</h3>
               <p className="mt-1 text-sm text-slate-600">
-                Upload files for this task. Files are stored in Supabase Storage and opened with temporary signed links.
+                Upload files for this task. Files are stored in Supabase Storage
+                and opened with temporary signed links.
               </p>
 
               <div className="mt-3 flex flex-col gap-3 md:flex-row md:items-center">
@@ -4550,9 +5847,12 @@ export default function Home() {
                       className="flex flex-col gap-3 rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm md:flex-row md:items-center md:justify-between"
                     >
                       <div>
-                        <p className="font-semibold text-slate-950">{attachment.file_name}</p>
+                        <p className="font-semibold text-slate-950">
+                          {attachment.file_name}
+                        </p>
                         <p className="text-xs text-slate-500">
-                          {formatFileSize(attachment.file_size_bytes)} · {attachment.file_type || "Unknown type"}
+                          {formatFileSize(attachment.file_size_bytes)} ·{" "}
+                          {attachment.file_type || "Unknown type"}
                         </p>
                       </div>
                       <div className="flex gap-2">
