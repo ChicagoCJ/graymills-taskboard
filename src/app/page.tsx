@@ -10,7 +10,7 @@ import {
 } from "@dnd-kit/core";
 import { supabase } from "@/lib/supabaseClient";
 
-const APP_REVISION = "Rev 1.33 — Added Graymills logo to header";
+const APP_REVISION = "Version 2.0 — Production email/auth cleanup";
 
 const statusColumns = [
   { id: "backlog", name: "Backlog", description: "Ideas, requests, and tasks not ready to start." },
@@ -542,6 +542,28 @@ function BoardColumn({
   );
 }
 
+function friendlyAuthErrorMessage(message: string) {
+  const lower = message.toLowerCase();
+
+  if (lower.includes("rate limit") || lower.includes("too many")) {
+    return "Password reset email rate limit reached. Wait before requesting another reset email. If this is urgent, an admin can reset the password from Supabase Authentication > Users.";
+  }
+
+  if (lower.includes("invalid login credentials")) {
+    return "That email/password combination did not work. Try again, or use Forgot Password to send a reset email.";
+  }
+
+  if (lower.includes("email not confirmed")) {
+    return "This email has not been confirmed yet. Check the inbox for a confirmation email, or ask an admin to confirm the user in Supabase.";
+  }
+
+  if (lower.includes("requested path is invalid") || lower.includes("redirect")) {
+    return "The password reset link could not open the correct page. Confirm the Supabase Site URL and Redirect URLs include this app URL and /update-password.";
+  }
+
+  return message;
+}
+
 function LoginScreen() {
   const [mode, setMode] = useState<"sign-in" | "sign-up" | "reset">("sign-in");
   const [fullName, setFullName] = useState("");
@@ -549,10 +571,14 @@ function LoginScreen() {
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
+  const [resetEmailSent, setResetEmailSent] = useState(false);
 
   function switchMode(nextMode: "sign-in" | "sign-up" | "reset") {
     setMode(nextMode);
     setMessage("");
+    if (nextMode !== "reset") {
+      setResetEmailSent(false);
+    }
   }
 
   async function handleAuth(event: React.FormEvent<HTMLFormElement>) {
@@ -573,11 +599,14 @@ function LoginScreen() {
         });
 
         if (error) {
-          setMessage(error.message);
+          setMessage(friendlyAuthErrorMessage(error.message));
           return;
         }
 
-        setMessage("Password reset email sent. Check your inbox and use the reset link within the email.");
+        setResetEmailSent(true);
+        setMessage(
+          `Password reset email sent. Check your inbox and use the reset link. The link should open ${redirectTo}. Do not click Send Reset Email again unless you need a new link.`
+        );
         return;
       }
 
@@ -594,16 +623,16 @@ function LoginScreen() {
         });
 
         if (error) {
-          setMessage(error.message);
+          setMessage(friendlyAuthErrorMessage(error.message));
           return;
         }
 
-        setMessage("Signup submitted. If email confirmation is enabled, check your email before signing in.");
+        setMessage("Signup submitted. If email confirmation is enabled, check your email before signing in. New users may need an admin to assign role/color settings.");
       } else {
         const { error } = await supabase.auth.signInWithPassword({ email, password });
 
         if (error) {
-          setMessage(error.message);
+          setMessage(friendlyAuthErrorMessage(error.message));
           return;
         }
 
@@ -617,13 +646,23 @@ function LoginScreen() {
   return (
     <main className="flex min-h-screen items-center justify-center bg-slate-50 px-6">
       <div className="w-full max-w-md rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-        <p className="text-xs font-medium text-slate-500">{APP_REVISION}</p>
-        <h1 className="mt-2 text-2xl font-bold tracking-tight text-slate-950">
-          Graymills TaskBoard
-        </h1>
-        <p className="mt-2 text-sm text-slate-600">
+        <div className="flex items-center gap-3">
+          <img
+            src="/graymills-logo.png"
+            alt="Graymills logo"
+            className="h-10 w-auto max-w-40 object-contain"
+          />
+          <div>
+            <p className="text-xs font-medium text-slate-500">{APP_REVISION}</p>
+            <h1 className="text-2xl font-bold tracking-tight text-slate-950">
+              TaskBoard
+            </h1>
+          </div>
+        </div>
+
+        <p className="mt-4 text-sm text-slate-600">
           {mode === "reset"
-            ? "Enter your email and we’ll send a password reset link."
+            ? "Enter your email and we’ll send a password reset link. The reset link will return to this same app."
             : "Sign in to view your shared marketing task board."}
         </p>
 
@@ -696,7 +735,7 @@ function LoginScreen() {
 
           <button
             type="submit"
-            disabled={busy}
+            disabled={busy || (mode === "reset" && resetEmailSent)}
             className="w-full rounded-xl bg-slate-950 px-5 py-3 text-sm font-semibold text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-400"
           >
             {busy
@@ -704,10 +743,33 @@ function LoginScreen() {
               : mode === "sign-up"
               ? "Create Account"
               : mode === "reset"
-              ? "Send Reset Email"
+              ? resetEmailSent
+                ? "Reset Email Sent"
+                : "Send Reset Email"
               : "Sign In"}
           </button>
         </form>
+
+        {mode === "reset" && (
+          <div className="mt-4 rounded-xl border border-blue-200 bg-blue-50 p-3 text-xs leading-relaxed text-blue-950">
+            <p className="font-semibold">Password reset tips</p>
+            <p className="mt-1">
+              Use the newest reset email only. Repeated requests can trigger Supabase email rate limits. If that happens, wait before trying again or ask an admin to reset your password in Supabase.
+            </p>
+            {resetEmailSent && (
+              <button
+                type="button"
+                onClick={() => {
+                  setResetEmailSent(false);
+                  setMessage("");
+                }}
+                className="mt-2 text-xs font-semibold underline underline-offset-4"
+              >
+                I need to request another link
+              </button>
+            )}
+          </div>
+        )}
 
         {mode !== "reset" && (
           <button
