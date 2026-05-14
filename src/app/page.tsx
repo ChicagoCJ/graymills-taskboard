@@ -10,7 +10,7 @@ import {
 } from "@dnd-kit/core";
 import { supabase } from "@/lib/supabaseClient";
 
-const APP_REVISION = "Version 2.8 — Added archived tasks restore panel";
+const APP_REVISION = "Version 2.9 — Added permanent archive cleanup controls";
 
 const statusColumns = [
   {
@@ -1015,6 +1015,9 @@ export default function Home() {
   const [archivedTaskSearch, setArchivedTaskSearch] = useState("");
   const [loadingArchivedTasks, setLoadingArchivedTasks] = useState(false);
   const [restoringArchivedTaskId, setRestoringArchivedTaskId] = useState<
+    string | null
+  >(null);
+  const [deletingArchivedTaskId, setDeletingArchivedTaskId] = useState<
     string | null
   >(null);
   const [adminMessage, setAdminMessage] = useState("");
@@ -2410,6 +2413,103 @@ export default function Home() {
       await Promise.all([loadBoardTasks(), loadArchivedTasks()]);
     } finally {
       setRestoringArchivedTaskId(null);
+    }
+  }
+
+  async function permanentlyDeleteArchivedTask(taskId: string) {
+    if (!isAdmin) return;
+
+    const taskToDelete = archivedTasks.find((task) => task.id === taskId);
+
+    const firstConfirm = window.confirm(
+      `Permanently delete this archived task?\n\n${taskToDelete?.title ?? "Selected task"}\n\nThis will delete the task record, comments, assignments, tags, activity history, attachment records, and stored attachment files. This cannot be undone.`,
+    );
+
+    if (!firstConfirm) return;
+
+    const typedConfirm = window.prompt(
+      'Type DELETE to permanently delete this archived task.',
+    );
+
+    if (typedConfirm !== "DELETE") {
+      setAdminMessage("Permanent delete canceled. You must type DELETE exactly.");
+      return;
+    }
+
+    setDeletingArchivedTaskId(taskId);
+    setAdminMessage("");
+
+    try {
+      const { data: attachments, error: attachmentLoadError } = await supabase
+        .from("task_attachments")
+        .select("id, file_path")
+        .eq("task_id", taskId);
+
+      if (attachmentLoadError) {
+        setAdminMessage(
+          `Could not load attachment records before delete: ${attachmentLoadError.message}`,
+        );
+        return;
+      }
+
+      const filePaths = (attachments ?? [])
+        .map((attachment) => attachment.file_path)
+        .filter(Boolean);
+
+      if (filePaths.length > 0) {
+        const { error: storageDeleteError } = await supabase.storage
+          .from("task-attachments")
+          .remove(filePaths);
+
+        if (storageDeleteError) {
+          setAdminMessage(
+            `Could not delete stored attachment files: ${storageDeleteError.message}`,
+          );
+          return;
+        }
+      }
+
+      const cleanupSteps: Array<{ tableName: string; label: string }> = [
+        { tableName: "notification_dismissals", label: "notification dismissals" },
+        { tableName: "task_custom_field_values", label: "custom field values" },
+        { tableName: "task_tags", label: "task tags" },
+        { tableName: "task_assignees", label: "task assignments" },
+        { tableName: "task_comments", label: "comments" },
+        { tableName: "task_attachments", label: "attachment records" },
+        { tableName: "activity_log", label: "activity history" },
+      ];
+
+      for (const step of cleanupSteps) {
+        const { error } = await supabase
+          .from(step.tableName)
+          .delete()
+          .eq("task_id", taskId);
+
+        if (error) {
+          setAdminMessage(
+            `Could not delete ${step.label}: ${error.message}. Task was not permanently deleted.`,
+          );
+          return;
+        }
+      }
+
+      const { error: taskDeleteError } = await supabase
+        .from("tasks")
+        .delete()
+        .eq("id", taskId)
+        .eq("is_archived", true);
+
+      if (taskDeleteError) {
+        setAdminMessage(`Could not permanently delete task: ${taskDeleteError.message}`);
+        return;
+      }
+
+      setAdminMessage(
+        `Permanently deleted archived task${taskToDelete?.title ? `: ${taskToDelete.title}` : ""}.`,
+      );
+      await Promise.all([loadBoardTasks(), loadArchivedTasks()]);
+    } finally {
+      setDeletingArchivedTaskId(null);
     }
   }
 
@@ -5660,10 +5760,7 @@ export default function Home() {
                   <div>
                     <h3 className="font-bold text-slate-950">Archived Tasks</h3>
                     <p className="mt-1 text-sm text-slate-600">
-                      Restore accidentally archived tasks. Archived tasks are
-                      hidden from the active board, but their comments,
-                      attachments, activity history, and backup records are
-                      preserved.
+                      Restore accidentally archived tasks, or permanently delete old archived tasks after a second confirmation. Archived tasks are hidden from the active board until restored.
                     </p>
                   </div>
                   <div className="flex flex-col gap-2 sm:flex-row">
@@ -5767,16 +5864,34 @@ export default function Home() {
                               </p>
                             </div>
 
-                            <button
-                              type="button"
-                              onClick={() => restoreArchivedTask(task.id)}
-                              disabled={restoringArchivedTaskId === task.id}
-                              className="shrink-0 rounded-xl border border-green-200 bg-white px-4 py-2 text-xs font-semibold text-green-700 hover:bg-green-50 disabled:cursor-not-allowed disabled:text-green-300"
-                            >
-                              {restoringArchivedTaskId === task.id
-                                ? "Restoring..."
-                                : "Restore Task"}
-                            </button>
+                            <div className="flex shrink-0 flex-col gap-2 sm:flex-row lg:flex-col">
+                              <button
+                                type="button"
+                                onClick={() => restoreArchivedTask(task.id)}
+                                disabled={
+                                  restoringArchivedTaskId === task.id ||
+                                  deletingArchivedTaskId === task.id
+                                }
+                                className="rounded-xl border border-green-200 bg-white px-4 py-2 text-xs font-semibold text-green-700 hover:bg-green-50 disabled:cursor-not-allowed disabled:text-green-300"
+                              >
+                                {restoringArchivedTaskId === task.id
+                                  ? "Restoring..."
+                                  : "Restore Task"}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => permanentlyDeleteArchivedTask(task.id)}
+                                disabled={
+                                  restoringArchivedTaskId === task.id ||
+                                  deletingArchivedTaskId === task.id
+                                }
+                                className="rounded-xl border border-red-200 bg-white px-4 py-2 text-xs font-semibold text-red-700 hover:bg-red-50 disabled:cursor-not-allowed disabled:text-red-300"
+                              >
+                                {deletingArchivedTaskId === task.id
+                                  ? "Deleting..."
+                                  : "Delete Forever"}
+                              </button>
+                            </div>
                           </div>
                         </div>
                       ))}
