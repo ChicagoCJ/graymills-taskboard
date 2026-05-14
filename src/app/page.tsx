@@ -10,7 +10,7 @@ import {
 } from "@dnd-kit/core";
 import { supabase } from "@/lib/supabaseClient";
 
-const APP_REVISION = "Version 2.2 — Reminder notifications and notification preferences";
+const APP_REVISION = "Version 2.3 — Added in-app help and training guide";
 
 const statusColumns = [
   { id: "backlog", name: "Backlog", description: "Ideas, requests, and tasks not ready to start." },
@@ -918,6 +918,7 @@ export default function Home() {
   const [copyingTaskId, setCopyingTaskId] = useState<string | null>(null);
 
   const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const [helpOpen, setHelpOpen] = useState(false);
   const [inAppNotificationsEnabled, setInAppNotificationsEnabled] = useState(true);
   const [emailNotificationsEnabled, setEmailNotificationsEnabled] = useState(false);
   const [reminderDueNotificationsEnabled, setReminderDueNotificationsEnabled] = useState(true);
@@ -3076,6 +3077,13 @@ export default function Home() {
                 </button>
                 <button
                   type="button"
+                  onClick={() => setHelpOpen(true)}
+                  className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                >
+                  Help
+                </button>
+                <button
+                  type="button"
                   onClick={() => setSettingsOpen(true)}
                   className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50"
                 >
@@ -3337,6 +3345,98 @@ export default function Home() {
         </div>
       </section>
 
+      {helpOpen && (
+        <div className="fixed inset-0 z-40 flex justify-end bg-slate-950/40">
+          <div className="h-full w-full max-w-3xl overflow-y-auto border-l border-slate-200 bg-slate-50 p-5 shadow-2xl">
+            <div className="mb-4 flex items-start justify-between gap-4">
+              <div>
+                <p className="text-xs font-medium text-slate-500">{APP_REVISION}</p>
+                <h2 className="mt-1 text-2xl font-bold text-slate-950">Help & Training Guide</h2>
+                <p className="mt-1 text-sm text-slate-600">
+                  A quick guide for using Graymills TaskBoard day to day.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setHelpOpen(false)}
+                className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+              >
+                Close
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                <h3 className="text-sm font-bold text-slate-950">1. Quick Add</h3>
+                <p className="mt-2 text-sm text-slate-600">
+                  Use Quick Add to create a task fast. Enter the task title, choose a project, person, and team, then click Add Task. New tasks start in Backlog.
+                </p>
+              </div>
+
+              <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                <h3 className="text-sm font-bold text-slate-950">2. Board Views</h3>
+                <div className="mt-2 space-y-2 text-sm text-slate-600">
+                  <p><span className="font-semibold text-slate-800">Status:</span> workflow view by Backlog, To Do, In Progress, Waiting, Review, and Done.</p>
+                  <p><span className="font-semibold text-slate-800">Assigned To:</span> people-only workload view.</p>
+                  <p><span className="font-semibold text-slate-800">By Team:</span> team-only workload view.</p>
+                  <p><span className="font-semibold text-slate-800">Project:</span> project-by-project planning view.</p>
+                  <p><span className="font-semibold text-slate-800">Calendar:</span> due-date view for Overdue, Today, Tomorrow, Next 7 Days, Later, and No Due Date.</p>
+                </div>
+              </div>
+
+              <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                <h3 className="text-sm font-bold text-slate-950">3. Drag and Drop</h3>
+                <p className="mt-2 text-sm text-slate-600">
+                  Drag cards to change the field represented by the current view. In Status view it changes status. In Assigned To view it changes person assignment. In By Team view it changes team. In Project view it changes project. In Calendar view it changes due date.
+                </p>
+              </div>
+
+              <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                <h3 className="text-sm font-bold text-slate-950">4. Open Card</h3>
+                <p className="mt-2 text-sm text-slate-600">
+                  Click Open to edit details, notes, due date, reminder date, priority, project, assignments, comments, attachments, Blitzit copy, and activity history.
+                </p>
+              </div>
+
+              <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                <h3 className="text-sm font-bold text-slate-950">5. Search and Smart Filters</h3>
+                <p className="mt-2 text-sm text-slate-600">
+                  Use Search to find tasks by title, notes, project, assignee, team, tags, status, priority, due date, or reminder text. Use Smart Filter for common views like My Tasks, Overdue, High Priority, Has Files, or Reminder Due.
+                </p>
+              </div>
+
+              <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                <h3 className="text-sm font-bold text-slate-950">6. Reminders and Notifications</h3>
+                <p className="mt-2 text-sm text-slate-600">
+                  Reminders are date-only. Open a card to set Tomorrow, 1 Week, End of Week / Friday, or a custom reminder date. Due and overdue reminders appear in the Notifications panel. Email delivery remains pending SMTP setup.
+                </p>
+              </div>
+
+              <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                <h3 className="text-sm font-bold text-slate-950">7. Files, Comments, and Activity</h3>
+                <p className="mt-2 text-sm text-slate-600">
+                  Attach Word documents, PDFs, images, and other supporting files inside a task. Use Comments for team discussion. Activity shows key changes such as edits, assignment changes, file changes, comments, and Blitzit copies.
+                </p>
+              </div>
+
+              <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                <h3 className="text-sm font-bold text-slate-950">8. Admin Tools</h3>
+                <p className="mt-2 text-sm text-slate-600">
+                  Admins can manage users, roles, profile colors, projects, teams, backups, and restore previews. Archive/deactivate preserves task history.
+                </p>
+              </div>
+
+              <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                <h3 className="text-sm font-bold text-slate-950">9. Blitzit</h3>
+                <p className="mt-2 text-sm text-slate-600">
+                  Save your Blitzit webhook settings in Settings. Use Copy or Re-copy on a task to send it one-way to Blitzit. This does not sync changes back from Blitzit.
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {notificationsOpen && (
         <div className="fixed inset-0 z-40 flex justify-end bg-slate-950/40">
           <div className="h-full w-full max-w-2xl overflow-y-auto border-l border-slate-200 bg-slate-50 p-5 shadow-2xl">
@@ -3584,14 +3684,12 @@ export default function Home() {
             </div>
 
             <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-              <h2 className="text-sm font-semibold text-slate-900">Version 2.2 Scope</h2>
+              <h2 className="text-sm font-semibold text-slate-900">Version 2.3 Scope</h2>
               <ul className="mt-2 space-y-2 text-sm text-slate-600">
-                <li>• In-app Notifications panel added</li>
-                <li>• Reminder due/overdue notifications added</li>
-                <li>• Dismiss notification workflow added</li>
-                <li>• Notification preferences added</li>
-                <li>• Email preference added but delivery remains pending SMTP setup</li>
-                <li>• Password reset, logo, search, comments, activity, attachments, backup/restore, and board views retained</li>
+                <li>• Help button added to the header</li>
+                <li>• Help & Training Guide pop-out added</li>
+                <li>• Quick Add, board views, drag/drop, Open Card, filters, reminders, files, comments, admin, and Blitzit instructions added</li>
+                <li>• Settings, Admin, Notifications, password reset, logo, search, comments, activity, attachments, backup/restore, and board views retained</li>
               </ul>
             </div>
 
