@@ -10,7 +10,7 @@ import {
 } from "@dnd-kit/core";
 import { supabase } from "@/lib/supabaseClient";
 
-const APP_REVISION = "Rev 1.31 — Production security hardening pass";
+const APP_REVISION = "Rev 1.33 — Added Graymills logo to header";
 
 const statusColumns = [
   { id: "backlog", name: "Backlog", description: "Ideas, requests, and tasks not ready to start." },
@@ -543,12 +543,17 @@ function BoardColumn({
 }
 
 function LoginScreen() {
-  const [mode, setMode] = useState<"sign-in" | "sign-up">("sign-in");
+  const [mode, setMode] = useState<"sign-in" | "sign-up" | "reset">("sign-in");
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
+
+  function switchMode(nextMode: "sign-in" | "sign-up" | "reset") {
+    setMode(nextMode);
+    setMessage("");
+  }
 
   async function handleAuth(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -556,6 +561,26 @@ function LoginScreen() {
     setMessage("");
 
     try {
+      if (mode === "reset") {
+        if (!email) {
+          setMessage("Enter your email address first.");
+          return;
+        }
+
+        const redirectTo = `${window.location.origin}/update-password`;
+        const { error } = await supabase.auth.resetPasswordForEmail(email, {
+          redirectTo,
+        });
+
+        if (error) {
+          setMessage(error.message);
+          return;
+        }
+
+        setMessage("Password reset email sent. Check your inbox and use the reset link within the email.");
+        return;
+      }
+
       if (!email || !password) {
         setMessage("Enter an email and password.");
         return;
@@ -597,13 +622,15 @@ function LoginScreen() {
           Graymills TaskBoard
         </h1>
         <p className="mt-2 text-sm text-slate-600">
-          Sign in to view your shared marketing task board.
+          {mode === "reset"
+            ? "Enter your email and we’ll send a password reset link."
+            : "Sign in to view your shared marketing task board."}
         </p>
 
-        <div className="mt-5 grid grid-cols-2 rounded-xl border border-slate-200 bg-slate-50 p-1">
+        <div className="mt-5 grid grid-cols-3 rounded-xl border border-slate-200 bg-slate-50 p-1">
           <button
             type="button"
-            onClick={() => { setMode("sign-in"); setMessage(""); }}
+            onClick={() => switchMode("sign-in")}
             className={`rounded-lg px-3 py-2 text-sm font-semibold ${
               mode === "sign-in" ? "bg-white text-slate-950 shadow-sm" : "text-slate-600"
             }`}
@@ -612,12 +639,21 @@ function LoginScreen() {
           </button>
           <button
             type="button"
-            onClick={() => { setMode("sign-up"); setMessage(""); }}
+            onClick={() => switchMode("sign-up")}
             className={`rounded-lg px-3 py-2 text-sm font-semibold ${
               mode === "sign-up" ? "bg-white text-slate-950 shadow-sm" : "text-slate-600"
             }`}
           >
             Sign Up
+          </button>
+          <button
+            type="button"
+            onClick={() => switchMode("reset")}
+            className={`rounded-lg px-3 py-2 text-sm font-semibold ${
+              mode === "reset" ? "bg-white text-slate-950 shadow-sm" : "text-slate-600"
+            }`}
+          >
+            Reset
           </button>
         </div>
 
@@ -645,25 +681,43 @@ function LoginScreen() {
             />
           </div>
 
-          <div>
-            <label className="text-sm font-semibold text-slate-900">Password</label>
-            <input
-              className="mt-1 w-full rounded-xl border border-slate-300 px-4 py-3 text-sm outline-none focus:border-slate-500"
-              type="password"
-              value={password}
-              onChange={(event) => setPassword(event.target.value)}
-              placeholder="Use a strong password"
-            />
-          </div>
+          {mode !== "reset" && (
+            <div>
+              <label className="text-sm font-semibold text-slate-900">Password</label>
+              <input
+                className="mt-1 w-full rounded-xl border border-slate-300 px-4 py-3 text-sm outline-none focus:border-slate-500"
+                type="password"
+                value={password}
+                onChange={(event) => setPassword(event.target.value)}
+                placeholder="Use a strong password"
+              />
+            </div>
+          )}
 
           <button
             type="submit"
             disabled={busy}
             className="w-full rounded-xl bg-slate-950 px-5 py-3 text-sm font-semibold text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-400"
           >
-            {busy ? "Working..." : mode === "sign-up" ? "Create Account" : "Sign In"}
+            {busy
+              ? "Working..."
+              : mode === "sign-up"
+              ? "Create Account"
+              : mode === "reset"
+              ? "Send Reset Email"
+              : "Sign In"}
           </button>
         </form>
+
+        {mode !== "reset" && (
+          <button
+            type="button"
+            onClick={() => switchMode("reset")}
+            className="mt-4 text-sm font-semibold text-slate-700 underline underline-offset-4 hover:text-slate-950"
+          >
+            Forgot your password?
+          </button>
+        )}
 
         {message && (
           <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">
@@ -2719,15 +2773,22 @@ export default function Home() {
     <main className="min-h-screen bg-slate-50">
       <header className="border-b border-slate-200 bg-white">
         <div className="mx-auto flex max-w-[1600px] flex-col gap-3 px-4 py-4 sm:px-6 md:flex-row md:items-center md:justify-between">
-          <div>
-            <p className="text-xs font-medium text-slate-500">{APP_REVISION}</p>
-            <h1 className="mt-1 text-2xl font-bold tracking-tight text-slate-950">
-              Graymills TaskBoard
-            </h1>
-            <p className="mt-1 text-sm text-slate-600">
-              Shared marketing project tasks, ad hoc teams, due dates, priorities,
-              files, comments, attachments, and one-way Blitzit copying.
-            </p>
+          <div className="flex items-start gap-4">
+            <img
+              src="/graymills-logo.png"
+              alt="Graymills logo"
+              className="mt-1 h-11 w-auto shrink-0 object-contain"
+            />
+            <div>
+              <p className="text-xs font-medium text-slate-500">{APP_REVISION}</p>
+              <h1 className="mt-1 text-2xl font-bold tracking-tight text-slate-950">
+                Graymills TaskBoard
+              </h1>
+              <p className="mt-1 text-sm text-slate-600">
+                Shared marketing project tasks, ad hoc teams, due dates, priorities,
+                files, comments, attachments, and one-way Blitzit copying.
+              </p>
+            </div>
           </div>
 
           <div className="space-y-2">
