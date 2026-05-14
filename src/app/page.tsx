@@ -10,7 +10,7 @@ import {
 } from "@dnd-kit/core";
 import { supabase } from "@/lib/supabaseClient";
 
-const APP_REVISION = "Version 2.5 — Added dashboard report exports";
+const APP_REVISION = "Version 2.7 — Added task archive controls";
 
 const statusColumns = [
   {
@@ -415,6 +415,19 @@ function formatFileSize(bytes: number | null) {
 
 function safeStorageName(fileName: string) {
   return fileName.replace(/[^a-zA-Z0-9.\-_]/g, "_");
+}
+
+function isEmailTaskFile(file: File) {
+  const lowerName = file.name.toLowerCase();
+  return lowerName.endsWith(".msg") || lowerName.endsWith(".eml");
+}
+
+function titleFromEmailFileName(fileName: string) {
+  return fileName
+    .replace(/\.(msg|eml)$/i, "")
+    .replace(/[_-]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim() || "Task from Outlook email";
 }
 
 function PriorityBadge({ priority }: { priority: string }) {
@@ -1030,6 +1043,10 @@ export default function Home() {
   const [creatingTask, setCreatingTask] = useState(false);
   const [quickAddMessage, setQuickAddMessage] = useState("");
 
+  const [emailTaskFile, setEmailTaskFile] = useState<File | null>(null);
+  const [creatingEmailTask, setCreatingEmailTask] = useState(false);
+  const [emailTaskMessage, setEmailTaskMessage] = useState("");
+
   const [movingTaskId, setMovingTaskId] = useState<string | null>(null);
 
   const [selectedTask, setSelectedTask] = useState<BoardTask | null>(null);
@@ -1044,6 +1061,7 @@ export default function Home() {
   const [editProfileIds, setEditProfileIds] = useState<string[]>([]);
   const [editTeamIds, setEditTeamIds] = useState<string[]>([]);
   const [savingTask, setSavingTask] = useState(false);
+  const [archivingTask, setArchivingTask] = useState(false);
   const [editMessage, setEditMessage] = useState("");
 
   const [attachments, setAttachments] = useState<TaskAttachmentRow[]>([]);
@@ -2863,6 +2881,173 @@ export default function Home() {
     await refreshAllData();
   }
 
+  function handleEmailTaskFile(file: File | null) {
+    if (!file) {
+      setEmailTaskFile(null);
+      setEmailTaskMessage("");
+      return;
+    }
+
+    if (!isEmailTaskFile(file)) {
+      setEmailTaskFile(null);
+      setEmailTaskMessage("Please choose a saved Outlook email file ending in .msg or .eml.");
+      return;
+    }
+
+    setEmailTaskFile(file);
+    setEmailTaskMessage(`Selected email file: ${file.name}`);
+  }
+
+  function handleEmailTaskInput(event: React.ChangeEvent<HTMLInputElement>) {
+    handleEmailTaskFile(event.target.files?.[0] ?? null);
+    event.target.value = "";
+  }
+
+  function handleEmailTaskDrop(event: React.DragEvent<HTMLDivElement>) {
+    event.preventDefault();
+    handleEmailTaskFile(event.dataTransfer.files?.[0] ?? null);
+  }
+
+  async function createTaskFromEmailFile() {
+    if (!session?.user.id || !profile) {
+      setEmailTaskMessage("You must be signed in before creating a task from an email file.");
+      return;
+    }
+
+    if (!emailTaskFile) {
+      setEmailTaskMessage("Choose or drop a saved .msg or .eml email file first.");
+      return;
+    }
+
+    if (!isEmailTaskFile(emailTaskFile)) {
+      setEmailTaskMessage("Please choose a saved Outlook email file ending in .msg or .eml.");
+      return;
+    }
+
+    const selectedProfileId = quickProfileId || session.user.id;
+    const selectedTeamId = quickTeamId;
+
+    if (!selectedProfileId && !selectedTeamId) {
+      setEmailTaskMessage("Choose a person, a team, or both before creating the email task.");
+      return;
+    }
+
+    setCreatingEmailTask(true);
+    setEmailTaskMessage("");
+
+    try {
+      const title = titleFromEmailFileName(emailTaskFile.name);
+      const nextSortOrder =
+        boardTasks.filter((task) => task.status === "backlog").length * 10 +
+        100;
+
+      const { data: newTask, error: taskError } = await supabase
+        .from("tasks")
+        .insert({
+          project_id: quickProjectId || null,
+          created_by_profile_id: session.user.id,
+          title,
+          description: `Created from saved Outlook email file: ${emailTaskFile.name}`,
+          status: "backlog",
+          priority: "normal",
+          sort_order: nextSortOrder,
+        })
+        .select("id")
+        .single();
+
+      if (taskError) {
+        setEmailTaskMessage(`Could not create email task: ${taskError.message}`);
+        return;
+      }
+
+      const { error: assigneeError } = await supabase
+        .from("task_assignees")
+        .insert({
+          task_id: newTask.id,
+          profile_id: selectedProfileId || null,
+          team_id: selectedTeamId || null,
+          assignment_type: buildAssignmentType(
+            selectedProfileId,
+            selectedTeamId,
+          ),
+        });
+
+      if (assigneeError) {
+        setEmailTaskMessage(
+          `Task was created, but assignment failed: ${assigneeError.message}`,
+        );
+        await loadBoardTasks();
+        return;
+      }
+
+      const storagePath = `${session.user.id}/${newTask.id}/${Date.now()}-${safeStorageName(emailTaskFile.name)}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from("task-attachments")
+        .upload(storagePath, emailTaskFile, {
+          cacheControl: "3600",
+          upsert: false,
+          contentType: emailTaskFile.type || "application/octet-stream",
+        });
+
+      if (uploadError) {
+        setEmailTaskMessage(
+          `Task was created, but the email file could not be attached: ${uploadError.message}`,
+        );
+        await loadBoardTasks();
+        return;
+      }
+
+      const { error: attachmentError } = await supabase
+        .from("task_attachments")
+        .insert({
+          task_id: newTask.id,
+          uploaded_by_profile_id: session.user.id,
+          file_name: emailTaskFile.name,
+          file_path: storagePath,
+          file_type: emailTaskFile.type || null,
+          file_size_bytes: emailTaskFile.size,
+        });
+
+      if (attachmentError) {
+        setEmailTaskMessage(
+          `Email file uploaded, but the attachment record failed: ${attachmentError.message}`,
+        );
+        await loadBoardTasks();
+        return;
+      }
+
+      await logTaskActivity(
+        newTask.id,
+        "created_from_email",
+        `Created task from email file: ${emailTaskFile.name}.`,
+        {
+          file_name: emailTaskFile.name,
+          file_size_bytes: emailTaskFile.size,
+          project_id: quickProjectId || null,
+          profile_ids: [selectedProfileId].filter(Boolean),
+          team_ids: [selectedTeamId].filter(Boolean),
+        },
+      );
+
+      await logTaskActivity(
+        newTask.id,
+        "attachment_added",
+        `Attached original email file: ${emailTaskFile.name}.`,
+        {
+          file_name: emailTaskFile.name,
+          file_size_bytes: emailTaskFile.size,
+        },
+      );
+
+      setEmailTaskFile(null);
+      setEmailTaskMessage("Email task created and original email file attached.");
+      await loadBoardTasks();
+    } finally {
+      setCreatingEmailTask(false);
+    }
+  }
+
   async function handleQuickAdd(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
@@ -3106,6 +3291,44 @@ export default function Home() {
       closeTaskEditor();
     } finally {
       setSavingTask(false);
+    }
+  }
+
+  async function archiveSelectedTask() {
+    if (!selectedTask) return;
+
+    const confirmed = window.confirm(
+      `Archive this task?\n\n${selectedTask.title}\n\nArchived tasks are hidden from the board but remain in Supabase for history and backup purposes.`,
+    );
+
+    if (!confirmed) return;
+
+    setArchivingTask(true);
+    setEditMessage("");
+
+    try {
+      await logTaskActivity(
+        selectedTask.id,
+        "archived",
+        `Archived task: ${selectedTask.title}.`,
+        { title: selectedTask.title },
+      );
+
+      const { error } = await supabase
+        .from("tasks")
+        .update({ is_archived: true })
+        .eq("id", selectedTask.id);
+
+      if (error) {
+        setEditMessage(`Could not archive task: ${error.message}`);
+        return;
+      }
+
+      await loadBoardTasks();
+      closeTaskEditor();
+      setTaskMessage("Task archived. It is hidden from the active board but preserved in Supabase.");
+    } finally {
+      setArchivingTask(false);
     }
   }
 
@@ -3970,6 +4193,53 @@ export default function Home() {
                 {quickAddMessage}
               </div>
             )}
+
+            <div className="mt-4 rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-4">
+              <div
+                onDragOver={(event) => event.preventDefault()}
+                onDrop={handleEmailTaskDrop}
+                className="rounded-xl border border-dashed border-slate-300 bg-white p-4 text-sm text-slate-700"
+              >
+                <p className="font-semibold text-slate-900">
+                  Create task from Outlook email
+                </p>
+                <p className="mt-1 text-xs text-slate-500">
+                  Drag a saved .msg or .eml email file here, or choose one below.
+                  The app creates a Backlog task and attaches the original email file.
+                </p>
+
+                <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center">
+                  <label className="cursor-pointer rounded-xl border border-slate-300 bg-white px-4 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50">
+                    Choose Email File
+                    <input
+                      type="file"
+                      accept=".msg,.eml,message/rfc822,application/vnd.ms-outlook"
+                      className="hidden"
+                      onChange={handleEmailTaskInput}
+                    />
+                  </label>
+                  <button
+                    type="button"
+                    onClick={createTaskFromEmailFile}
+                    disabled={creatingEmailTask}
+                    className="rounded-xl bg-slate-950 px-4 py-2 text-xs font-semibold text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-400"
+                  >
+                    {creatingEmailTask ? "Creating..." : "Create Email Task"}
+                  </button>
+                  {emailTaskFile && (
+                    <span className="text-xs text-slate-600">
+                      Selected: {emailTaskFile.name}
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              {emailTaskMessage && (
+                <div className="mt-3 rounded-xl border border-slate-200 bg-white p-3 text-sm text-slate-700">
+                  {emailTaskMessage}
+                </div>
+              )}
+            </div>
           </form>
 
           <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
@@ -5863,21 +6133,41 @@ export default function Home() {
                 </div>
               )}
 
-              <div className="flex flex-col gap-3 border-t border-slate-200 pt-4 md:flex-row md:justify-end">
+              <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+                <p className="font-semibold">Need to remove this task?</p>
+                <p className="mt-1">
+                  Use Archive Task to hide it from the active board while keeping
+                  the record, comments, attachments, and activity history for
+                  backup/audit purposes.
+                </p>
+              </div>
+
+              <div className="flex flex-col gap-3 border-t border-slate-200 pt-4 md:flex-row md:items-center md:justify-between">
                 <button
                   type="button"
-                  onClick={closeTaskEditor}
-                  className="rounded-xl border border-slate-300 bg-white px-5 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+                  onClick={archiveSelectedTask}
+                  disabled={archivingTask || savingTask}
+                  className="rounded-xl border border-red-200 bg-white px-5 py-3 text-sm font-semibold text-red-700 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50"
                 >
-                  Cancel
+                  {archivingTask ? "Archiving..." : "Archive Task"}
                 </button>
-                <button
-                  type="submit"
-                  disabled={savingTask}
-                  className="rounded-xl bg-slate-950 px-5 py-3 text-sm font-semibold text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-400"
-                >
-                  {savingTask ? "Saving..." : "Save Task"}
-                </button>
+
+                <div className="flex flex-col gap-3 md:flex-row md:justify-end">
+                  <button
+                    type="button"
+                    onClick={closeTaskEditor}
+                    className="rounded-xl border border-slate-300 bg-white px-5 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={savingTask || archivingTask}
+                    className="rounded-xl bg-slate-950 px-5 py-3 text-sm font-semibold text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-400"
+                  >
+                    {savingTask ? "Saving..." : "Save Task"}
+                  </button>
+                </div>
               </div>
             </form>
 
