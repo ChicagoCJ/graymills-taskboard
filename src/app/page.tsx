@@ -10,7 +10,7 @@ import {
 } from "@dnd-kit/core";
 import { supabase } from "@/lib/supabaseClient";
 
-const APP_REVISION = "Version 2.7 — Added task archive controls";
+const APP_REVISION = "Version 2.8 — Added archived tasks restore panel";
 
 const statusColumns = [
   {
@@ -222,6 +222,20 @@ type BoardTask = {
   blitzitCopiedAt: string | null;
 };
 
+type ArchivedTask = {
+  id: string;
+  title: string;
+  project: string;
+  assignees: string[];
+  team: string;
+  status: string;
+  priority: string;
+  due: string;
+  archivedDisplayDate: string;
+  updatedAt: string | null;
+  createdAt: string | null;
+};
+
 type DisplayColumn = {
   id: string;
   name: string;
@@ -235,8 +249,6 @@ const supabaseStatus =
   supabaseUrl && supabaseKey
     ? "Supabase environment variables detected"
     : "Supabase environment variables missing";
-
-
 
 type CsvRow = Record<string, string | number | null | undefined>;
 
@@ -254,7 +266,9 @@ function rowsToCsv(rows: CsvRow[], headers?: string[]) {
 
   const lines = [
     csvHeaders.map(csvEscape).join(","),
-    ...rows.map((row) => csvHeaders.map((header) => csvEscape(row[header])).join(",")),
+    ...rows.map((row) =>
+      csvHeaders.map((header) => csvEscape(row[header])).join(","),
+    ),
   ];
 
   return lines.join("\n");
@@ -423,11 +437,13 @@ function isEmailTaskFile(file: File) {
 }
 
 function titleFromEmailFileName(fileName: string) {
-  return fileName
-    .replace(/\.(msg|eml)$/i, "")
-    .replace(/[_-]+/g, " ")
-    .replace(/\s+/g, " ")
-    .trim() || "Task from Outlook email";
+  return (
+    fileName
+      .replace(/\.(msg|eml)$/i, "")
+      .replace(/[_-]+/g, " ")
+      .replace(/\s+/g, " ")
+      .trim() || "Task from Outlook email"
+  );
 }
 
 function PriorityBadge({ priority }: { priority: string }) {
@@ -995,6 +1011,12 @@ export default function Home() {
   const [adminProjects, setAdminProjects] = useState<ProjectRow[]>([]);
   const [adminTeams, setAdminTeams] = useState<TeamRow[]>([]);
   const [adminProfiles, setAdminProfiles] = useState<ProfileRow[]>([]);
+  const [archivedTasks, setArchivedTasks] = useState<ArchivedTask[]>([]);
+  const [archivedTaskSearch, setArchivedTaskSearch] = useState("");
+  const [loadingArchivedTasks, setLoadingArchivedTasks] = useState(false);
+  const [restoringArchivedTaskId, setRestoringArchivedTaskId] = useState<
+    string | null
+  >(null);
   const [adminMessage, setAdminMessage] = useState("");
   const [backupMessage, setBackupMessage] = useState("");
   const [exportingBackup, setExportingBackup] = useState(false);
@@ -1405,6 +1427,29 @@ export default function Home() {
     [boardTasks, activeSmartFilter, taskSearchQuery, session?.user.id],
   );
 
+  const filteredArchivedTasks = useMemo(() => {
+    const cleanQuery = archivedTaskSearch.trim().toLowerCase();
+
+    if (!cleanQuery) return archivedTasks;
+
+    return archivedTasks.filter((task) => {
+      const searchableText = [
+        task.title,
+        task.project,
+        task.assignees.join(" "),
+        task.team,
+        task.status,
+        formatPriority(task.priority),
+        task.due,
+        task.archivedDisplayDate,
+      ]
+        .join(" ")
+        .toLowerCase();
+
+      return searchableText.includes(cleanQuery);
+    });
+  }, [archivedTasks, archivedTaskSearch]);
+
   const reminderNotificationTasks = useMemo(() => {
     if (!inAppNotificationsEnabled || !reminderDueNotificationsEnabled)
       return [];
@@ -1561,7 +1606,6 @@ export default function Home() {
     };
   }, [boardTasks, projects, profiles, teams]);
 
-
   function taskToReportRow(task: BoardTask): CsvRow {
     return {
       Task: task.title,
@@ -1608,8 +1652,14 @@ export default function Home() {
       { Metric: "Open Tasks", Value: dashboardStats.openTasks },
       { Metric: "Completed Tasks", Value: dashboardStats.completedTasks },
       { Metric: "Overdue", Value: dashboardStats.overdueTasks.length },
-      { Metric: "Due This Week", Value: dashboardStats.dueThisWeekTasks.length },
-      { Metric: "High / Urgent", Value: dashboardStats.highPriorityTasks.length },
+      {
+        Metric: "Due This Week",
+        Value: dashboardStats.dueThisWeekTasks.length,
+      },
+      {
+        Metric: "High / Urgent",
+        Value: dashboardStats.highPriorityTasks.length,
+      },
       { Metric: "Waiting", Value: dashboardStats.waitingTasks.length },
       { Metric: "Needs Review", Value: dashboardStats.reviewTasks.length },
       { Metric: "Reminder Due", Value: dashboardStats.reminderDueTasks.length },
@@ -2181,9 +2231,192 @@ export default function Home() {
     }
   }
 
+  async function loadArchivedTasks() {
+    if (!isAdmin) return;
+
+    setLoadingArchivedTasks(true);
+
+    try {
+      const { data: archivedRows, error: archivedError } = await supabase
+        .from("tasks")
+        .select(
+          "id, project_id, title, status, priority, due_date, created_at, updated_at",
+        )
+        .eq("is_archived", true)
+        .order("updated_at", { ascending: false });
+
+      if (archivedError) {
+        setAdminMessage(
+          `Could not load archived tasks: ${archivedError.message}`,
+        );
+        setArchivedTasks([]);
+        return;
+      }
+
+      const [projectsResult, assigneesResult, profilesResult, teamsResult] =
+        await Promise.all([
+          supabase.from("projects").select("id, name, is_active").order("name"),
+          supabase
+            .from("task_assignees")
+            .select("task_id, assignment_type, profile_id, team_id"),
+          supabase
+            .from("profiles")
+            .select("id, email, full_name, profile_color, role, is_active")
+            .order("full_name"),
+          supabase
+            .from("teams")
+            .select("id, name, team_color, is_active")
+            .order("name"),
+        ]);
+
+      if (projectsResult.error) {
+        setAdminMessage(
+          `Could not load archived task projects: ${projectsResult.error.message}`,
+        );
+        return;
+      }
+      if (assigneesResult.error) {
+        setAdminMessage(
+          `Could not load archived task assignments: ${assigneesResult.error.message}`,
+        );
+        return;
+      }
+      if (profilesResult.error) {
+        setAdminMessage(
+          `Could not load archived task profiles: ${profilesResult.error.message}`,
+        );
+        return;
+      }
+      if (teamsResult.error) {
+        setAdminMessage(
+          `Could not load archived task teams: ${teamsResult.error.message}`,
+        );
+        return;
+      }
+
+      const projectMap = new Map(
+        ((projectsResult.data ?? []) as ProjectRow[]).map((project) => [
+          project.id,
+          project,
+        ]),
+      );
+      const profileMap = new Map(
+        ((profilesResult.data ?? []) as ProfileRow[]).map((profileRow) => [
+          profileRow.id,
+          profileRow,
+        ]),
+      );
+      const teamMap = new Map(
+        ((teamsResult.data ?? []) as TeamRow[]).map((team) => [team.id, team]),
+      );
+
+      const assigneesByTask = new Map<string, TaskAssigneeRow[]>();
+      ((assigneesResult.data ?? []) as TaskAssigneeRow[]).forEach(
+        (assignee) => {
+          const existing = assigneesByTask.get(assignee.task_id) ?? [];
+          existing.push(assignee);
+          assigneesByTask.set(assignee.task_id, existing);
+        },
+      );
+
+      const formattedArchivedTasks: ArchivedTask[] = (
+        (archivedRows ?? []) as (TaskRow & {
+          created_at?: string | null;
+          updated_at?: string | null;
+        })[]
+      ).map((task) => {
+        const taskAssignees = assigneesByTask.get(task.id) ?? [];
+        const assigneeNames: string[] = [];
+        const teamNames: string[] = [];
+
+        taskAssignees.forEach((assignee) => {
+          if (assignee.profile_id) {
+            const assignedProfile = profileMap.get(assignee.profile_id);
+            if (assignedProfile)
+              assigneeNames.push(displayProfileName(assignedProfile));
+          }
+
+          if (assignee.team_id) {
+            const assignedTeam = teamMap.get(assignee.team_id);
+            if (assignedTeam) teamNames.push(assignedTeam.name);
+          }
+        });
+
+        const updatedAt = task.updated_at ?? null;
+        const archivedDate = updatedAt ? new Date(updatedAt) : null;
+
+        return {
+          id: task.id,
+          title: task.title,
+          project: task.project_id
+            ? (projectMap.get(task.project_id)?.name ??
+              "Archived or missing project")
+            : "No project",
+          assignees: Array.from(new Set(assigneeNames)),
+          team:
+            teamNames.length > 0
+              ? Array.from(new Set(teamNames)).join(", ")
+              : "No team",
+          status: task.status,
+          priority: task.priority,
+          due: formatDate(task.due_date),
+          archivedDisplayDate:
+            archivedDate && !Number.isNaN(archivedDate.getTime())
+              ? archivedDate.toLocaleString()
+              : "Unknown",
+          updatedAt,
+          createdAt: task.created_at ?? null,
+        };
+      });
+
+      setArchivedTasks(formattedArchivedTasks);
+    } finally {
+      setLoadingArchivedTasks(false);
+    }
+  }
+
+  async function restoreArchivedTask(taskId: string) {
+    if (!isAdmin) return;
+
+    const taskToRestore = archivedTasks.find((task) => task.id === taskId);
+    const confirmed = window.confirm(
+      `Restore this archived task?\n\n${taskToRestore?.title ?? "Selected task"}\n\nIt will return to the active board in its previous status column.`,
+    );
+
+    if (!confirmed) return;
+
+    setRestoringArchivedTaskId(taskId);
+    setAdminMessage("");
+
+    try {
+      const { error } = await supabase
+        .from("tasks")
+        .update({ is_archived: false })
+        .eq("id", taskId);
+
+      if (error) {
+        setAdminMessage(`Could not restore task: ${error.message}`);
+        return;
+      }
+
+      await logTaskActivity(
+        taskId,
+        "restored",
+        `Restored archived task${taskToRestore?.title ? `: ${taskToRestore.title}` : ""}.`,
+        { title: taskToRestore?.title ?? null },
+      );
+
+      setAdminMessage("Archived task restored to the active board.");
+      await Promise.all([loadBoardTasks(), loadArchivedTasks()]);
+    } finally {
+      setRestoringArchivedTaskId(null);
+    }
+  }
+
   async function refreshAllData() {
     await loadBoardTasks();
     await loadAdminData();
+    await loadArchivedTasks();
   }
 
   async function readBackupTable(tableName: string) {
@@ -2890,7 +3123,9 @@ export default function Home() {
 
     if (!isEmailTaskFile(file)) {
       setEmailTaskFile(null);
-      setEmailTaskMessage("Please choose a saved Outlook email file ending in .msg or .eml.");
+      setEmailTaskMessage(
+        "Please choose a saved Outlook email file ending in .msg or .eml.",
+      );
       return;
     }
 
@@ -2910,17 +3145,23 @@ export default function Home() {
 
   async function createTaskFromEmailFile() {
     if (!session?.user.id || !profile) {
-      setEmailTaskMessage("You must be signed in before creating a task from an email file.");
+      setEmailTaskMessage(
+        "You must be signed in before creating a task from an email file.",
+      );
       return;
     }
 
     if (!emailTaskFile) {
-      setEmailTaskMessage("Choose or drop a saved .msg or .eml email file first.");
+      setEmailTaskMessage(
+        "Choose or drop a saved .msg or .eml email file first.",
+      );
       return;
     }
 
     if (!isEmailTaskFile(emailTaskFile)) {
-      setEmailTaskMessage("Please choose a saved Outlook email file ending in .msg or .eml.");
+      setEmailTaskMessage(
+        "Please choose a saved Outlook email file ending in .msg or .eml.",
+      );
       return;
     }
 
@@ -2928,7 +3169,9 @@ export default function Home() {
     const selectedTeamId = quickTeamId;
 
     if (!selectedProfileId && !selectedTeamId) {
-      setEmailTaskMessage("Choose a person, a team, or both before creating the email task.");
+      setEmailTaskMessage(
+        "Choose a person, a team, or both before creating the email task.",
+      );
       return;
     }
 
@@ -2956,7 +3199,9 @@ export default function Home() {
         .single();
 
       if (taskError) {
-        setEmailTaskMessage(`Could not create email task: ${taskError.message}`);
+        setEmailTaskMessage(
+          `Could not create email task: ${taskError.message}`,
+        );
         return;
       }
 
@@ -3041,7 +3286,9 @@ export default function Home() {
       );
 
       setEmailTaskFile(null);
-      setEmailTaskMessage("Email task created and original email file attached.");
+      setEmailTaskMessage(
+        "Email task created and original email file attached.",
+      );
       await loadBoardTasks();
     } finally {
       setCreatingEmailTask(false);
@@ -3326,7 +3573,9 @@ export default function Home() {
 
       await loadBoardTasks();
       closeTaskEditor();
-      setTaskMessage("Task archived. It is hidden from the active board but preserved in Supabase.");
+      setTaskMessage(
+        "Task archived. It is hidden from the active board but preserved in Supabase.",
+      );
     } finally {
       setArchivingTask(false);
     }
@@ -3962,7 +4211,10 @@ export default function Home() {
   }, [session]);
 
   useEffect(() => {
-    if (isAdmin) loadAdminData();
+    if (isAdmin) {
+      loadAdminData();
+      loadArchivedTasks();
+    }
   }, [isAdmin]);
 
   if (loadingSession) {
@@ -4204,8 +4456,9 @@ export default function Home() {
                   Create task from Outlook email
                 </p>
                 <p className="mt-1 text-xs text-slate-500">
-                  Drag a saved .msg or .eml email file here, or choose one below.
-                  The app creates a Backlog task and attaches the original email file.
+                  Drag a saved .msg or .eml email file here, or choose one
+                  below. The app creates a Backlog task and attaches the
+                  original email file.
                 </p>
 
                 <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center">
@@ -5266,11 +5519,11 @@ export default function Home() {
               <div className="mb-4 flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
                 <div>
                   <h2 className="text-xl font-bold text-slate-950">
-                    Admin: Users, Projects & Teams
+                    Admin: Users, Projects, Teams & Archives
                   </h2>
                   <p className="text-sm text-slate-600">
-                    Manage users, profile colors, roles, projects, and teams.
-                    Archive/deactivate preserves task history.
+                    Manage users, profile colors, roles, projects, teams, and
+                    archived tasks. Archive/deactivate preserves task history.
                   </p>
                 </div>
                 <div className="flex flex-wrap gap-2">
@@ -5400,6 +5653,136 @@ export default function Home() {
                     {backupMessage}
                   </div>
                 )}
+              </div>
+
+              <div className="mb-5 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                  <div>
+                    <h3 className="font-bold text-slate-950">Archived Tasks</h3>
+                    <p className="mt-1 text-sm text-slate-600">
+                      Restore accidentally archived tasks. Archived tasks are
+                      hidden from the active board, but their comments,
+                      attachments, activity history, and backup records are
+                      preserved.
+                    </p>
+                  </div>
+                  <div className="flex flex-col gap-2 sm:flex-row">
+                    <input
+                      className="rounded-xl border border-slate-300 px-4 py-3 text-sm outline-none focus:border-slate-500"
+                      placeholder="Search archived tasks"
+                      value={archivedTaskSearch}
+                      onChange={(event) =>
+                        setArchivedTaskSearch(event.target.value)
+                      }
+                    />
+                    <button
+                      type="button"
+                      onClick={loadArchivedTasks}
+                      disabled={loadingArchivedTasks}
+                      className="rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:text-slate-400"
+                    >
+                      {loadingArchivedTasks ? "Loading..." : "Refresh Archives"}
+                    </button>
+                  </div>
+                </div>
+
+                <div className="mt-4 rounded-2xl border border-slate-200 bg-white p-4">
+                  <div className="mb-3 flex items-center justify-between gap-3">
+                    <p className="text-sm font-semibold text-slate-950">
+                      {filteredArchivedTasks.length} archived task
+                      {filteredArchivedTasks.length === 1 ? "" : "s"}
+                    </p>
+                    {archivedTaskSearch && (
+                      <button
+                        type="button"
+                        onClick={() => setArchivedTaskSearch("")}
+                        className="rounded-lg border border-slate-200 px-2 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                      >
+                        Clear Search
+                      </button>
+                    )}
+                  </div>
+
+                  {filteredArchivedTasks.length === 0 ? (
+                    <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 p-4 text-center text-sm text-slate-500">
+                      {archivedTaskSearch
+                        ? "No archived tasks match this search."
+                        : "No archived tasks found."}
+                    </div>
+                  ) : (
+                    <div className="max-h-96 space-y-2 overflow-y-auto pr-1">
+                      {filteredArchivedTasks.map((task) => (
+                        <div
+                          key={task.id}
+                          className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm"
+                        >
+                          <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                            <div className="min-w-0">
+                              <p className="font-semibold text-slate-950">
+                                {task.title}
+                              </p>
+                              <div className="mt-1 grid gap-1 text-xs text-slate-600 md:grid-cols-2 xl:grid-cols-3">
+                                <p>
+                                  <span className="font-semibold text-slate-800">
+                                    Project:
+                                  </span>{" "}
+                                  {task.project}
+                                </p>
+                                <p>
+                                  <span className="font-semibold text-slate-800">
+                                    Assigned:
+                                  </span>{" "}
+                                  {task.assignees.length > 0
+                                    ? task.assignees.join(", ")
+                                    : "Unassigned"}
+                                </p>
+                                <p>
+                                  <span className="font-semibold text-slate-800">
+                                    Team:
+                                  </span>{" "}
+                                  {task.team}
+                                </p>
+                                <p>
+                                  <span className="font-semibold text-slate-800">
+                                    Status:
+                                  </span>{" "}
+                                  {describeStatus(task.status)}
+                                </p>
+                                <p>
+                                  <span className="font-semibold text-slate-800">
+                                    Priority:
+                                  </span>{" "}
+                                  {formatPriority(task.priority)}
+                                </p>
+                                <p>
+                                  <span className="font-semibold text-slate-800">
+                                    Due:
+                                  </span>{" "}
+                                  {task.due}
+                                </p>
+                              </div>
+                              <p className="mt-2 text-xs text-slate-500">
+                                Last updated / archived:{" "}
+                                {task.archivedDisplayDate}
+                              </p>
+                            </div>
+
+                            <button
+                              type="button"
+                              onClick={() => restoreArchivedTask(task.id)}
+                              disabled={restoringArchivedTaskId === task.id}
+                              className="shrink-0 rounded-xl border border-green-200 bg-white px-4 py-2 text-xs font-semibold text-green-700 hover:bg-green-50 disabled:cursor-not-allowed disabled:text-green-300"
+                            >
+                              {restoringArchivedTaskId === task.id
+                                ? "Restoring..."
+                                : "Restore Task"}
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
               </div>
 
               <div className="grid gap-5 xl:grid-cols-3">
@@ -6136,9 +6519,9 @@ export default function Home() {
               <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
                 <p className="font-semibold">Need to remove this task?</p>
                 <p className="mt-1">
-                  Use Archive Task to hide it from the active board while keeping
-                  the record, comments, attachments, and activity history for
-                  backup/audit purposes.
+                  Use Archive Task to hide it from the active board while
+                  keeping the record, comments, attachments, and activity
+                  history for backup/audit purposes.
                 </p>
               </div>
 
