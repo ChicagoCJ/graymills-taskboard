@@ -10,7 +10,7 @@ import {
 } from "@dnd-kit/core";
 import { supabase } from "@/lib/supabaseClient";
 
-const APP_REVISION = "Version 2.4 — Added dashboard and reporting view";
+const APP_REVISION = "Version 2.5 — Added dashboard report exports";
 
 const statusColumns = [
   {
@@ -235,6 +235,47 @@ const supabaseStatus =
   supabaseUrl && supabaseKey
     ? "Supabase environment variables detected"
     : "Supabase environment variables missing";
+
+
+
+type CsvRow = Record<string, string | number | null | undefined>;
+
+function csvEscape(value: string | number | null | undefined) {
+  const text = value === null || value === undefined ? "" : String(value);
+  if (/[",\n\r]/.test(text)) {
+    return `"${text.replace(/"/g, '""')}"`;
+  }
+  return text;
+}
+
+function rowsToCsv(rows: CsvRow[], headers?: string[]) {
+  const csvHeaders =
+    headers ?? Array.from(new Set(rows.flatMap((row) => Object.keys(row))));
+
+  const lines = [
+    csvHeaders.map(csvEscape).join(","),
+    ...rows.map((row) => csvHeaders.map((header) => csvEscape(row[header])).join(",")),
+  ];
+
+  return lines.join("\n");
+}
+
+function downloadCsvFile(filename: string, rows: CsvRow[], headers?: string[]) {
+  const csv = rowsToCsv(rows, headers);
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+}
+
+function todayFileStamp() {
+  return new Date().toISOString().slice(0, 10);
+}
 
 function displayProfileName(profileRow: ProfileRow) {
   return profileRow.full_name || profileRow.email || "Unnamed user";
@@ -1501,6 +1542,107 @@ export default function Home() {
       recentlyCompleted,
     };
   }, [boardTasks, projects, profiles, teams]);
+
+
+  function taskToReportRow(task: BoardTask): CsvRow {
+    return {
+      Task: task.title,
+      Status:
+        statusColumns.find((column) => column.id === task.status)?.name ??
+        task.status,
+      Priority: formatPriority(task.priority),
+      Project: task.project,
+      People:
+        task.assignees.length > 0 ? task.assignees.join("; ") : "Unassigned",
+      Teams: task.team,
+      "Due Date": task.dueRaw ?? "",
+      "Reminder Date": toReminderDateInput(task.reminderAt),
+      "Reminder Note": task.reminderNote ?? "",
+      Tags: task.tags.join("; "),
+      Files: task.attachmentCount,
+      Comments: task.commentCount,
+      "Copied to Blitzit": task.blitzitCopiedAt ? "Yes" : "No",
+      "Task ID": task.id,
+    };
+  }
+
+  function exportOpenTasksReport() {
+    const openTasks = boardTasks.filter(
+      (task) => task.status !== "done" && task.status !== "canceled",
+    );
+
+    downloadCsvFile(
+      `graymills-taskboard-open-tasks-${todayFileStamp()}.csv`,
+      openTasks.map(taskToReportRow),
+    );
+  }
+
+  function exportOverdueTasksReport() {
+    downloadCsvFile(
+      `graymills-taskboard-overdue-tasks-${todayFileStamp()}.csv`,
+      dashboardStats.overdueTasks.map(taskToReportRow),
+    );
+  }
+
+  function exportDashboardSummaryReport() {
+    const rows: CsvRow[] = [
+      { Metric: "Total Tasks", Value: dashboardStats.totalTasks },
+      { Metric: "Open Tasks", Value: dashboardStats.openTasks },
+      { Metric: "Completed Tasks", Value: dashboardStats.completedTasks },
+      { Metric: "Overdue", Value: dashboardStats.overdueTasks.length },
+      { Metric: "Due This Week", Value: dashboardStats.dueThisWeekTasks.length },
+      { Metric: "High / Urgent", Value: dashboardStats.highPriorityTasks.length },
+      { Metric: "Waiting", Value: dashboardStats.waitingTasks.length },
+      { Metric: "Needs Review", Value: dashboardStats.reviewTasks.length },
+      { Metric: "Reminder Due", Value: dashboardStats.reminderDueTasks.length },
+      {
+        Metric: "Not Copied to Blitzit",
+        Value: dashboardStats.notCopiedToBlitzitTasks.length,
+      },
+    ];
+
+    downloadCsvFile(
+      `graymills-taskboard-dashboard-summary-${todayFileStamp()}.csv`,
+      rows,
+      ["Metric", "Value"],
+    );
+  }
+
+  function exportDashboardBreakdownsReport() {
+    const rows: CsvRow[] = [
+      ...dashboardStats.countByStatus.map((item) => ({
+        Category: "Status",
+        Label: item.label,
+        Count: item.count,
+      })),
+      ...dashboardStats.countByPriority.map((item) => ({
+        Category: "Priority",
+        Label: item.label,
+        Count: item.count,
+      })),
+      ...dashboardStats.countByProject.map((item) => ({
+        Category: "Project",
+        Label: item.label,
+        Count: item.count,
+      })),
+      ...dashboardStats.countByPerson.map((item) => ({
+        Category: "Person",
+        Label: item.label,
+        Count: item.count,
+      })),
+      ...dashboardStats.countByTeam.map((item) => ({
+        Category: "Team",
+        Label: item.label,
+        Count: item.count,
+      })),
+    ];
+
+    downloadCsvFile(
+      `graymills-taskboard-dashboard-breakdowns-${todayFileStamp()}.csv`,
+      rows,
+      ["Category", "Label", "Count"],
+    );
+  }
 
   async function loadProfile(userId: string) {
     setProfileMessage("");
@@ -4045,6 +4187,50 @@ export default function Home() {
               >
                 Close
               </button>
+            </div>
+
+            <div className="mb-5 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+              <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                <div>
+                  <h3 className="text-sm font-bold text-slate-950">
+                    Export Reports
+                  </h3>
+                  <p className="mt-1 text-sm text-slate-600">
+                    Download CSV reports for management review, Excel, or email
+                    follow-up. These exports do not include Blitzit secrets.
+                  </p>
+                </div>
+                <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+                  <button
+                    type="button"
+                    onClick={exportDashboardSummaryReport}
+                    className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                  >
+                    Summary CSV
+                  </button>
+                  <button
+                    type="button"
+                    onClick={exportDashboardBreakdownsReport}
+                    className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                  >
+                    Breakdowns CSV
+                  </button>
+                  <button
+                    type="button"
+                    onClick={exportOpenTasksReport}
+                    className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                  >
+                    Open Tasks CSV
+                  </button>
+                  <button
+                    type="button"
+                    onClick={exportOverdueTasksReport}
+                    className="rounded-xl border border-red-200 bg-white px-3 py-2 text-xs font-semibold text-red-700 hover:bg-red-50"
+                  >
+                    Overdue CSV
+                  </button>
+                </div>
+              </div>
             </div>
 
             <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
