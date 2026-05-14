@@ -10,7 +10,7 @@ import {
 } from "@dnd-kit/core";
 import { supabase } from "@/lib/supabaseClient";
 
-const APP_REVISION = "Version 2.0 — Production email/auth cleanup";
+const APP_REVISION = "Version 2.2 — Reminder notifications and notification preferences";
 
 const statusColumns = [
   { id: "backlog", name: "Backlog", description: "Ideas, requests, and tasks not ready to start." },
@@ -149,6 +149,21 @@ type TaskActivityRow = {
   actor_name?: string;
 };
 
+type NotificationPreferenceRow = {
+  profile_id: string;
+  in_app_enabled: boolean;
+  email_enabled: boolean;
+  reminder_due_enabled: boolean;
+  include_overdue: boolean;
+  updated_at?: string | null;
+};
+
+type NotificationDismissalRow = {
+  profile_id: string;
+  task_id: string;
+  dismissed_at: string;
+};
+
 type BoardTask = {
   id: string;
   projectId: string | null;
@@ -225,6 +240,20 @@ function reminderIsDue(dateValue: string | null) {
   const reminderDateInput = toReminderDateInput(dateValue);
   if (!reminderDateInput) return false;
   return reminderDateInput <= toLocalDateInput(new Date());
+}
+
+function reminderIsToday(dateValue: string | null) {
+  if (!dateValue) return false;
+  const reminderDateInput = toReminderDateInput(dateValue);
+  if (!reminderDateInput) return false;
+  return reminderDateInput === toLocalDateInput(new Date());
+}
+
+function reminderIsOverdue(dateValue: string | null) {
+  if (!dateValue) return false;
+  const reminderDateInput = toReminderDateInput(dateValue);
+  if (!reminderDateInput) return false;
+  return reminderDateInput < toLocalDateInput(new Date());
 }
 
 function reminderDateToIso(dateInputValue: string) {
@@ -888,6 +917,16 @@ export default function Home() {
   const [blitzitMessage, setBlitzitMessage] = useState("");
   const [copyingTaskId, setCopyingTaskId] = useState<string | null>(null);
 
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const [inAppNotificationsEnabled, setInAppNotificationsEnabled] = useState(true);
+  const [emailNotificationsEnabled, setEmailNotificationsEnabled] = useState(false);
+  const [reminderDueNotificationsEnabled, setReminderDueNotificationsEnabled] = useState(true);
+  const [includeOverdueNotifications, setIncludeOverdueNotifications] = useState(true);
+  const [dismissedNotificationTaskIds, setDismissedNotificationTaskIds] = useState<string[]>([]);
+  const [showDismissedNotifications, setShowDismissedNotifications] = useState(false);
+  const [savingNotificationSettings, setSavingNotificationSettings] = useState(false);
+  const [notificationMessage, setNotificationMessage] = useState("");
+
   const accountInactive = profile?.is_active === false;
   const isAdmin = profile?.role === "admin" && !accountInactive;
   const currentEmail = session?.user.email ?? "Unknown user";
@@ -1120,6 +1159,37 @@ export default function Home() {
       ),
     [boardTasks, activeSmartFilter, taskSearchQuery, session?.user.id]
   );
+
+
+  const reminderNotificationTasks = useMemo(() => {
+    if (!inAppNotificationsEnabled || !reminderDueNotificationsEnabled) return [];
+
+    return boardTasks
+      .filter((task) => {
+        if (!task.reminderAt) return false;
+        if (task.status === "done") return false;
+        if (dismissedNotificationTaskIds.includes(task.id) && !showDismissedNotifications) return false;
+        if (includeOverdueNotifications) return reminderIsDue(task.reminderAt);
+        return reminderIsToday(task.reminderAt);
+      })
+      .sort((a, b) => {
+        const aDate = toReminderDateInput(a.reminderAt);
+        const bDate = toReminderDateInput(b.reminderAt);
+        return aDate.localeCompare(bDate) || a.title.localeCompare(b.title);
+      });
+  }, [boardTasks, inAppNotificationsEnabled, reminderDueNotificationsEnabled, includeOverdueNotifications, dismissedNotificationTaskIds, showDismissedNotifications]);
+
+  const activeNotificationCount = useMemo(() => {
+    if (!inAppNotificationsEnabled || !reminderDueNotificationsEnabled) return 0;
+
+    return boardTasks.filter((task) => {
+      if (!task.reminderAt) return false;
+      if (task.status === "done") return false;
+      if (dismissedNotificationTaskIds.includes(task.id)) return false;
+      if (includeOverdueNotifications) return reminderIsDue(task.reminderAt);
+      return reminderIsToday(task.reminderAt);
+    }).length;
+  }, [boardTasks, inAppNotificationsEnabled, reminderDueNotificationsEnabled, includeOverdueNotifications, dismissedNotificationTaskIds]);
 
   async function loadProfile(userId: string) {
     setProfileMessage("");
@@ -1577,6 +1647,8 @@ export default function Home() {
         "task_tags",
         "task_comments",
         "task_attachments",
+        "notification_preferences",
+        "notification_dismissals",
         "custom_fields",
         "task_custom_field_values",
       ];
@@ -1647,6 +1719,8 @@ export default function Home() {
     { tableName: "task_tags", onConflict: "task_id,tag_id" },
     { tableName: "task_comments", onConflict: "id" },
     { tableName: "task_attachments", onConflict: "id" },
+    { tableName: "notification_preferences", onConflict: "profile_id" },
+    { tableName: "notification_dismissals", onConflict: "profile_id,task_id" },
     { tableName: "task_custom_field_values", onConflict: "id" },
   ] as const;
 
@@ -1811,6 +1885,120 @@ export default function Home() {
 
     setBlitzitMessage("Blitzit settings saved.");
     setSavingBlitzitSettings(false);
+  }
+
+
+  async function loadNotificationSettings() {
+    if (!session?.user.id) return;
+
+    const { data: preferences, error: preferencesError } = await supabase
+      .from("notification_preferences")
+      .select("profile_id, in_app_enabled, email_enabled, reminder_due_enabled, include_overdue, updated_at")
+      .eq("profile_id", session.user.id)
+      .maybeSingle();
+
+    if (preferencesError) {
+      setNotificationMessage(`Could not load notification preferences: ${preferencesError.message}`);
+    } else if (preferences) {
+      const row = preferences as NotificationPreferenceRow;
+      setInAppNotificationsEnabled(row.in_app_enabled);
+      setEmailNotificationsEnabled(row.email_enabled);
+      setReminderDueNotificationsEnabled(row.reminder_due_enabled);
+      setIncludeOverdueNotifications(row.include_overdue);
+    }
+
+    const { data: dismissals, error: dismissalsError } = await supabase
+      .from("notification_dismissals")
+      .select("profile_id, task_id, dismissed_at")
+      .eq("profile_id", session.user.id);
+
+    if (dismissalsError) {
+      setNotificationMessage(`Could not load notification dismissals: ${dismissalsError.message}`);
+      return;
+    }
+
+    setDismissedNotificationTaskIds(((dismissals ?? []) as NotificationDismissalRow[]).map((row) => row.task_id));
+  }
+
+  async function saveNotificationSettings(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    if (!session?.user.id) {
+      setNotificationMessage("You must be signed in before saving notification preferences.");
+      return;
+    }
+
+    setSavingNotificationSettings(true);
+    setNotificationMessage("");
+
+    const { error } = await supabase.from("notification_preferences").upsert(
+      {
+        profile_id: session.user.id,
+        in_app_enabled: inAppNotificationsEnabled,
+        email_enabled: emailNotificationsEnabled,
+        reminder_due_enabled: reminderDueNotificationsEnabled,
+        include_overdue: includeOverdueNotifications,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: "profile_id" }
+    );
+
+    if (error) {
+      setNotificationMessage(`Could not save notification preferences: ${error.message}`);
+      setSavingNotificationSettings(false);
+      return;
+    }
+
+    setNotificationMessage(
+      emailNotificationsEnabled
+        ? "Notification preferences saved. Email delivery is still pending SMTP setup."
+        : "Notification preferences saved."
+    );
+    setSavingNotificationSettings(false);
+  }
+
+  async function dismissNotification(taskId: string) {
+    if (!session?.user.id) return;
+
+    const { error } = await supabase.from("notification_dismissals").upsert(
+      {
+        profile_id: session.user.id,
+        task_id: taskId,
+        dismissed_at: new Date().toISOString(),
+      },
+      { onConflict: "profile_id,task_id" }
+    );
+
+    if (error) {
+      setNotificationMessage(`Could not dismiss notification: ${error.message}`);
+      return;
+    }
+
+    setDismissedNotificationTaskIds((current) =>
+      current.includes(taskId) ? current : [...current, taskId]
+    );
+  }
+
+  async function clearDismissedNotifications() {
+    if (!session?.user.id) return;
+
+    const { error } = await supabase
+      .from("notification_dismissals")
+      .delete()
+      .eq("profile_id", session.user.id);
+
+    if (error) {
+      setNotificationMessage(`Could not clear dismissed notifications: ${error.message}`);
+      return;
+    }
+
+    setDismissedNotificationTaskIds([]);
+    setNotificationMessage("Dismissed notifications cleared.");
+  }
+
+  function openTaskFromNotification(task: BoardTask) {
+    setNotificationsOpen(false);
+    openTaskEditor(task);
   }
 
   async function copyTaskToBlitzit(task: BoardTask) {
@@ -2790,6 +2978,7 @@ export default function Home() {
     if (session) {
       loadBoardTasks();
       loadBlitzitSettings();
+      loadNotificationSettings();
     }
   }, [session]);
 
@@ -2878,6 +3067,13 @@ export default function Home() {
                     Admin
                   </button>
                 )}
+                <button
+                  type="button"
+                  onClick={() => setNotificationsOpen(true)}
+                  className={`rounded-xl border px-3 py-2 text-xs font-semibold ${activeNotificationCount > 0 ? "border-amber-300 bg-amber-50 text-amber-800 hover:bg-amber-100" : "border-slate-300 bg-white text-slate-700 hover:bg-slate-50"}`}
+                >
+                  Notifications{activeNotificationCount > 0 ? ` (${activeNotificationCount})` : ""}
+                </button>
                 <button
                   type="button"
                   onClick={() => setSettingsOpen(true)}
@@ -3141,6 +3337,106 @@ export default function Home() {
         </div>
       </section>
 
+      {notificationsOpen && (
+        <div className="fixed inset-0 z-40 flex justify-end bg-slate-950/40">
+          <div className="h-full w-full max-w-2xl overflow-y-auto border-l border-slate-200 bg-slate-50 p-5 shadow-2xl">
+            <div className="mb-4 flex items-start justify-between gap-4">
+              <div>
+                <p className="text-xs font-medium text-slate-500">{APP_REVISION}</p>
+                <h2 className="mt-1 text-2xl font-bold text-slate-950">Notifications</h2>
+                <p className="mt-1 text-sm text-slate-600">
+                  Reminder notifications appear here when a task reminder is due. Email delivery is pending SMTP setup.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setNotificationsOpen(false)}
+                className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+              >
+                Close
+              </button>
+            </div>
+
+            {notificationMessage && (
+              <div className="mb-4 rounded-xl border border-slate-200 bg-white p-3 text-sm text-slate-700">
+                {notificationMessage}
+              </div>
+            )}
+
+            <div className="mb-4 flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={() => setShowDismissedNotifications((current) => !current)}
+                className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+              >
+                {showDismissedNotifications ? "Hide Dismissed" : "Show Dismissed"}
+              </button>
+              <button
+                type="button"
+                onClick={clearDismissedNotifications}
+                className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+              >
+                Clear Dismissed
+              </button>
+            </div>
+
+            <div className="space-y-3">
+              {reminderNotificationTasks.length === 0 ? (
+                <div className="rounded-2xl border border-slate-200 bg-white p-5 text-sm text-slate-600 shadow-sm">
+                  No reminder notifications to show.
+                </div>
+              ) : (
+                reminderNotificationTasks.map((task) => {
+                  const dismissed = dismissedNotificationTaskIds.includes(task.id);
+                  return (
+                    <div
+                      key={task.id}
+                      className={`rounded-2xl border bg-white p-4 shadow-sm ${dismissed ? "border-slate-200 opacity-60" : reminderIsOverdue(task.reminderAt) ? "border-red-200" : "border-amber-200"}`}
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <p className="text-sm font-bold text-slate-950">{task.title}</p>
+                          <p className={`mt-1 text-xs font-semibold ${reminderIsOverdue(task.reminderAt) ? "text-red-700" : "text-amber-700"}`}>
+                            Reminder: {formatReminderDate(task.reminderAt)}
+                            {dismissed ? " · dismissed" : ""}
+                          </p>
+                          <p className="mt-1 text-xs text-slate-600">
+                            Project: {task.project} · Assigned: {task.assignees.length > 0 ? task.assignees.join(", ") : "Unassigned"}
+                          </p>
+                          {task.reminderNote && (
+                            <p className="mt-2 rounded-xl bg-slate-50 p-2 text-xs text-slate-600">
+                              {task.reminderNote}
+                            </p>
+                          )}
+                        </div>
+                        <div className="flex shrink-0 flex-col gap-2">
+                          <button
+                            type="button"
+                            onClick={() => openTaskFromNotification(task)}
+                            className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                          >
+                            Open
+                          </button>
+                          {!dismissed && (
+                            <button
+                              type="button"
+                              onClick={() => dismissNotification(task.id)}
+                              className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                            >
+                              Dismiss
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
       {settingsOpen && (
         <div className="fixed inset-0 z-40 flex justify-end bg-slate-950/40">
           <div className="h-full w-full max-w-md overflow-y-auto border-l border-slate-200 bg-white p-5 shadow-2xl">
@@ -3206,6 +3502,59 @@ export default function Home() {
               )}
             </form>
 
+            <form onSubmit={saveNotificationSettings} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+              <h2 className="text-sm font-semibold text-slate-900">Notification Preferences</h2>
+              <p className="mt-2 text-sm text-slate-600">
+                In-app reminder notifications are live. Email notifications are saved as a preference, but delivery is paused until IT configures SMTP.
+              </p>
+              <div className="mt-3 space-y-3 text-sm text-slate-700">
+                <label className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={inAppNotificationsEnabled}
+                    onChange={(event) => setInAppNotificationsEnabled(event.target.checked)}
+                  />
+                  Enable in-app notifications
+                </label>
+                <label className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={reminderDueNotificationsEnabled}
+                    onChange={(event) => setReminderDueNotificationsEnabled(event.target.checked)}
+                  />
+                  Show reminder-due notifications
+                </label>
+                <label className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={includeOverdueNotifications}
+                    onChange={(event) => setIncludeOverdueNotifications(event.target.checked)}
+                  />
+                  Include overdue reminders
+                </label>
+                <label className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={emailNotificationsEnabled}
+                    onChange={(event) => setEmailNotificationsEnabled(event.target.checked)}
+                  />
+                  Email notifications preferred — pending SMTP setup
+                </label>
+              </div>
+              <button
+                type="submit"
+                disabled={savingNotificationSettings}
+                className="mt-4 w-full rounded-xl bg-slate-950 px-3 py-2 text-sm font-semibold text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-400"
+              >
+                {savingNotificationSettings ? "Saving..." : "Save Notification Preferences"}
+              </button>
+              {notificationMessage && (
+                <div className="mt-3 rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs text-slate-700">
+                  {notificationMessage}
+                </div>
+              )}
+            </form>
+
             <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
               <h2 className="text-sm font-semibold text-slate-900">Security / Reliability</h2>
               <p className="mt-2 text-sm text-slate-600">
@@ -3230,20 +3579,19 @@ export default function Home() {
             <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
               <h2 className="text-sm font-semibold text-slate-900">Reminders</h2>
               <p className="mt-2 text-sm text-slate-600">
-                Open a card to set a reminder date and reminder notes. Use Smart Filter for Has Reminder or Reminder Due.
+                Open a card to set a reminder date and reminder notes. Due reminders now appear in the Notifications panel and can still be filtered with Has Reminder or Reminder Due.
               </p>
             </div>
 
             <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-              <h2 className="text-sm font-semibold text-slate-900">Rev 1.31 Scope</h2>
+              <h2 className="text-sm font-semibold text-slate-900">Version 2.2 Scope</h2>
               <ul className="mt-2 space-y-2 text-sm text-slate-600">
-                <li>• Production RLS hardening SQL added</li>
-                <li>• Inactive-user handling retained</li>
-                <li>• Admin-only controls retained</li>
-                <li>• Blitzit secrets remain excluded from backup/restore</li>
-                <li>• Reminder date-only improvements retained</li>
-                <li>• Search, comments, activity, attachments, and board views retained</li>
-                <li>• Still staying in Rev 1 until go-live</li>
+                <li>• In-app Notifications panel added</li>
+                <li>• Reminder due/overdue notifications added</li>
+                <li>• Dismiss notification workflow added</li>
+                <li>• Notification preferences added</li>
+                <li>• Email preference added but delivery remains pending SMTP setup</li>
+                <li>• Password reset, logo, search, comments, activity, attachments, backup/restore, and board views retained</li>
               </ul>
             </div>
 
