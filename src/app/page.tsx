@@ -10,7 +10,7 @@ import {
 } from "@dnd-kit/core";
 import { supabase } from "@/lib/supabaseClient";
 
-const APP_REVISION = "Version 2.9 — Added permanent archive cleanup controls";
+const APP_REVISION = "Version 3.0 — Major schema cleanup and reliability pass";
 
 const statusColumns = [
   {
