@@ -10,7 +10,7 @@ import {
 } from "@dnd-kit/core";
 import { supabase } from "@/lib/supabaseClient";
 
-const APP_REVISION = "Version 3.5 — Added onboarding and help guide";
+const APP_REVISION = "Version 3.6 — Improved task opening and save placement";
 
 const statusColumns = [
   {
@@ -551,7 +551,16 @@ function TaskCard({
     <div
       ref={setCombinedNodeRef}
       style={style}
-      className={`rounded-2xl border bg-white p-3 shadow-sm transition hover:shadow-md ${
+      onClick={() => onOpen(task)}
+      role="button"
+      tabIndex={0}
+      onKeyDown={(event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          onOpen(task);
+        }
+      }}
+      className={`cursor-pointer rounded-2xl border bg-white p-3 shadow-sm transition hover:shadow-md ${
         isDragging
           ? "border-blue-300 opacity-70 shadow-xl"
           : isOver
@@ -559,7 +568,10 @@ function TaskCard({
             : "border-slate-200"
       }`}
     >
-      <div className="mb-2 flex items-center justify-between gap-2">
+      <div
+        className="mb-2 flex items-center justify-between gap-2"
+        onClick={(event) => event.stopPropagation()}
+      >
         <label className="inline-flex items-center gap-2 text-xs font-semibold text-slate-600">
           <input
             type="checkbox"
@@ -634,7 +646,7 @@ function TaskCard({
           <span>Comments: {task.commentCount}</span>
         </div>
 
-        <div className="flex gap-2">
+        <div className="flex gap-2" onClick={(event) => event.stopPropagation()}>
           <button
             type="button"
             {...listeners}
@@ -7078,16 +7090,26 @@ export default function Home() {
                   Open Card
                 </h2>
               </div>
-              <button
-                type="button"
-                onClick={closeTaskEditor}
-                className="rounded-xl border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
-              >
-                Close
-              </button>
+              <div className="flex gap-2">
+                <button
+                  type="submit"
+                  form="task-edit-form"
+                  disabled={savingTask || archivingTask}
+                  className="rounded-xl bg-slate-950 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-400"
+                >
+                  {savingTask ? "Saving..." : "Save"}
+                </button>
+                <button
+                  type="button"
+                  onClick={closeTaskEditor}
+                  className="rounded-xl border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+                >
+                  Close
+                </button>
+              </div>
             </div>
 
-            <form onSubmit={saveTaskEdits} className="space-y-4">
+            <form id="task-edit-form" onSubmit={saveTaskEdits} className="space-y-4">
               <div>
                 <label className="text-sm font-semibold text-slate-900">
                   Task title
