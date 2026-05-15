@@ -10,7 +10,7 @@ import {
 } from "@dnd-kit/core";
 import { supabase } from "@/lib/supabaseClient";
 
-const APP_REVISION = "Version 3.11 — Moved archive controls to bottom of task";
+const APP_REVISION = "Version 3.12 — Collapsed activity below attachments";
 
 const statusColumns = [
   {
@@ -1256,6 +1256,7 @@ export default function Home() {
 
   const [activities, setActivities] = useState<TaskActivityRow[]>([]);
   const [activityMessage, setActivityMessage] = useState("");
+  const [activityExpanded, setActivityExpanded] = useState(false);
 
   const [blitzitWebhookUrl, setBlitzitWebhookUrl] = useState("");
   const [blitzitSigningSecret, setBlitzitSigningSecret] = useState("");
@@ -4292,6 +4293,7 @@ export default function Home() {
     setNewSubtaskTitle("");
     setActivityMessage("");
     setActivities([]);
+    setActivityExpanded(false);
     await Promise.all([
       loadAttachments(task.id),
       loadComments(task.id),
@@ -4314,6 +4316,7 @@ export default function Home() {
     setNewSubtaskTitle("");
     setActivityMessage("");
     setActivities([]);
+    setActivityExpanded(false);
   }
 
   function toggleEditProfile(profileId: string) {
@@ -8124,49 +8127,6 @@ export default function Home() {
             </section>
 
             <section className="mt-6 border-t border-slate-200 pt-5">
-              <h3 className="text-lg font-bold text-slate-950">Activity</h3>
-              <p className="mt-1 text-sm text-slate-600">
-                Timeline of tracked changes and actions for this task.
-              </p>
-
-              {activityMessage && (
-                <div className="mt-3 rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">
-                  {activityMessage}
-                </div>
-              )}
-
-              <div className="mt-4 space-y-2">
-                {activities.length === 0 ? (
-                  <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 p-4 text-center text-sm text-slate-500">
-                    No activity has been logged for this task yet.
-                  </div>
-                ) : (
-                  activities.map((activity) => (
-                    <div
-                      key={activity.id}
-                      className="rounded-xl border border-slate-200 bg-white p-3 text-sm"
-                    >
-                      <div className="flex flex-col gap-1 md:flex-row md:items-center md:justify-between">
-                        <p className="font-semibold text-slate-950">
-                          {activity.actor_name || "System"}
-                        </p>
-                        <p className="text-xs text-slate-500">
-                          {new Date(activity.created_at).toLocaleString()}
-                        </p>
-                      </div>
-                      <p className="mt-2 whitespace-pre-wrap text-slate-700">
-                        {activity.activity_text}
-                      </p>
-                      <p className="mt-1 text-xs uppercase tracking-wide text-slate-400">
-                        {activity.activity_type.replaceAll("_", " ")}
-                      </p>
-                    </div>
-                  ))
-                )}
-              </div>
-            </section>
-
-            <section className="mt-6 border-t border-slate-200 pt-5">
               <h3 className="text-lg font-bold text-slate-950">Attachments</h3>
               <p className="mt-1 text-sm text-slate-600">
                 Upload files for this task. Files are stored in Supabase Storage
@@ -8241,6 +8201,72 @@ export default function Home() {
                   ))
                 )}
               </div>
+            </section>
+
+            <section className="mt-6 border-t border-slate-200 pt-5">
+              <button
+                type="button"
+                onClick={() => setActivityExpanded((current) => !current)}
+                className="flex w-full items-center justify-between rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-left hover:bg-slate-100"
+              >
+                <span>
+                  <span className="block text-lg font-bold text-slate-950">
+                    Activity
+                  </span>
+                  <span className="mt-1 block text-sm text-slate-600">
+                    {activities.length === 0
+                      ? "No tracked changes yet."
+                      : `${activities.length} tracked change${activities.length === 1 ? "" : "s"}.`}
+                  </span>
+                </span>
+                <span className="text-2xl font-bold leading-none text-slate-500">
+                  {activityExpanded ? "⌃" : "⌄"}
+                </span>
+              </button>
+
+              {activityExpanded && (
+                <div className="mt-4">
+                  <p className="text-sm text-slate-600">
+                    Timeline of tracked changes and actions for this task.
+                  </p>
+
+                  {activityMessage && (
+                    <div className="mt-3 rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">
+                      {activityMessage}
+                    </div>
+                  )}
+
+                  <div className="mt-4 space-y-2">
+                    {activities.length === 0 ? (
+                      <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 p-4 text-center text-sm text-slate-500">
+                        No activity has been logged for this task yet.
+                      </div>
+                    ) : (
+                      activities.map((activity) => (
+                        <div
+                          key={activity.id}
+                          className="rounded-xl border border-slate-200 bg-white p-3 text-sm"
+                        >
+                          <div className="flex flex-col gap-1 md:flex-row md:items-center md:justify-between">
+                            <p className="font-semibold text-slate-950">
+                              {activity.actor_name || "System"}
+                            </p>
+                            <p className="text-xs text-slate-500">
+                              {new Date(activity.created_at).toLocaleString()}
+                            </p>
+                          </div>
+                          <p className="mt-2 whitespace-pre-wrap text-slate-700">
+                            {activity.activity_text}
+                          </p>
+                          <p className="mt-1 text-xs uppercase tracking-wide text-slate-400">
+                            {activity.activity_type.replaceAll("_", " ")}
+                          </p>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+              )}
             </section>
 
             <section className="mt-6 border-t border-slate-200 pt-5">
