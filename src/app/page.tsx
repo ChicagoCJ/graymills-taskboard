@@ -10,7 +10,7 @@ import {
 } from "@dnd-kit/core";
 import { supabase } from "@/lib/supabaseClient";
 
-const APP_REVISION = "Version 3.2 — Added manager role and permissions";
+const APP_REVISION = "Version 3.4 — Added team membership management";
 
 const statusColumns = [
   {
@@ -116,6 +116,11 @@ type ProfileRow = {
   profile_color: string;
   role?: "admin" | "manager" | "member";
   is_active?: boolean;
+};
+
+type TeamMemberRow = {
+  team_id: string;
+  profile_id: string;
 };
 
 type TaskRow = {
@@ -679,6 +684,8 @@ function BoardColumn({
   blitzitReady,
   selectedTaskIds,
   onToggleTaskSelection,
+  onAddTask,
+  addingTaskColumnId,
 }: {
   column: DisplayColumn;
   tasks: BoardTask[];
@@ -688,6 +695,8 @@ function BoardColumn({
   blitzitReady: boolean;
   selectedTaskIds: string[];
   onToggleTaskSelection: (taskId: string) => void;
+  onAddTask: (column: DisplayColumn) => void;
+  addingTaskColumnId: string | null;
 }) {
   const { isOver, setNodeRef } = useDroppable({
     id: `column:${column.id}`,
@@ -735,6 +744,15 @@ function BoardColumn({
           ))
         )}
       </div>
+
+      <button
+        type="button"
+        onClick={() => onAddTask(column)}
+        disabled={addingTaskColumnId === column.id}
+        className="mt-3 w-full rounded-xl border border-dashed border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:text-slate-400"
+      >
+        {addingTaskColumnId === column.id ? "Adding..." : "+ Add Task"}
+      </button>
     </div>
   );
 }
@@ -1035,6 +1053,9 @@ export default function Home() {
   const [adminProjects, setAdminProjects] = useState<ProjectRow[]>([]);
   const [adminTeams, setAdminTeams] = useState<TeamRow[]>([]);
   const [adminProfiles, setAdminProfiles] = useState<ProfileRow[]>([]);
+  const [teamMemberships, setTeamMemberships] = useState<TeamMemberRow[]>([]);
+  const [memberToAddByTeam, setMemberToAddByTeam] = useState<Record<string, string>>({});
+  const [teamMembershipBusy, setTeamMembershipBusy] = useState<string | null>(null);
   const [archivedTasks, setArchivedTasks] = useState<ArchivedTask[]>([]);
   const [archivedTaskSearch, setArchivedTaskSearch] = useState("");
   const [loadingArchivedTasks, setLoadingArchivedTasks] = useState(false);
@@ -1092,6 +1113,7 @@ export default function Home() {
   const [quickProfileId, setQuickProfileId] = useState("");
   const [quickTeamId, setQuickTeamId] = useState("");
   const [creatingTask, setCreatingTask] = useState(false);
+  const [creatingColumnTaskId, setCreatingColumnTaskId] = useState<string | null>(null);
   const [quickAddMessage, setQuickAddMessage] = useState("");
 
   const [emailTaskFile, setEmailTaskFile] = useState<File | null>(null);
@@ -1794,7 +1816,7 @@ export default function Home() {
   async function loadAdminData() {
     if (!canManageWorkspace) return;
 
-    const [projectResult, teamResult, profileResult] = await Promise.all([
+    const [projectResult, teamResult, profileResult, teamMembersResult] = await Promise.all([
       supabase
         .from("projects")
         .select("id, name, description, status, target_date, is_active")
@@ -1810,6 +1832,9 @@ export default function Home() {
         .select("id, email, full_name, profile_color, role, is_active")
         .order("is_active", { ascending: false })
         .order("full_name"),
+      supabase
+        .from("team_members")
+        .select("team_id, profile_id"),
     ]);
 
     if (projectResult.error) {
@@ -1833,9 +1858,17 @@ export default function Home() {
       return;
     }
 
+    if (teamMembersResult.error) {
+      setAdminMessage(
+        `Could not load team memberships: ${teamMembersResult.error.message}`,
+      );
+      return;
+    }
+
     setAdminProjects((projectResult.data ?? []) as ProjectRow[]);
     setAdminTeams((teamResult.data ?? []) as TeamRow[]);
     setAdminProfiles((profileResult.data ?? []) as ProfileRow[]);
+    setTeamMemberships((teamMembersResult.data ?? []) as TeamMemberRow[]);
   }
 
   function startEditUser(userProfile: ProfileRow) {
@@ -3380,6 +3413,87 @@ export default function Home() {
     await refreshAllData();
   }
 
+  function getTeamMemberProfileIds(teamId: string) {
+    return teamMemberships
+      .filter((membership) => membership.team_id === teamId)
+      .map((membership) => membership.profile_id);
+  }
+
+  function getProfileNameById(profileId: string) {
+    const foundProfile = adminProfiles.find((profileRow) => profileRow.id === profileId) ||
+      profiles.find((profileRow) => profileRow.id === profileId);
+
+    return foundProfile ? displayProfileName(foundProfile) : "Unknown user";
+  }
+
+  function getAvailableTeamMembers(teamId: string) {
+    const currentMemberIds = getTeamMemberProfileIds(teamId);
+
+    return adminProfiles.filter(
+      (profileRow) =>
+        profileRow.is_active !== false && !currentMemberIds.includes(profileRow.id),
+    );
+  }
+
+  async function addTeamMember(teamId: string) {
+    if (!canManageWorkspace) return;
+
+    const profileIdToAdd = memberToAddByTeam[teamId];
+
+    if (!profileIdToAdd) {
+      setAdminMessage("Choose a user to add to the team.");
+      return;
+    }
+
+    setTeamMembershipBusy(`${teamId}:${profileIdToAdd}:add`);
+    setAdminMessage("");
+
+    const { error } = await supabase.from("team_members").insert({
+      team_id: teamId,
+      profile_id: profileIdToAdd,
+    });
+
+    if (error) {
+      setAdminMessage(`Could not add team member: ${error.message}`);
+      setTeamMembershipBusy(null);
+      return;
+    }
+
+    setMemberToAddByTeam((current) => ({ ...current, [teamId]: "" }));
+    setAdminMessage("Team member added.");
+    await refreshAllData();
+    setTeamMembershipBusy(null);
+  }
+
+  async function removeTeamMember(teamId: string, profileIdToRemove: string) {
+    if (!canManageWorkspace) return;
+
+    const confirmed = window.confirm(
+      `Remove ${getProfileNameById(profileIdToRemove)} from this team? Team-assigned tasks will no longer be visible to them through this team.`,
+    );
+
+    if (!confirmed) return;
+
+    setTeamMembershipBusy(`${teamId}:${profileIdToRemove}:remove`);
+    setAdminMessage("");
+
+    const { error } = await supabase
+      .from("team_members")
+      .delete()
+      .eq("team_id", teamId)
+      .eq("profile_id", profileIdToRemove);
+
+    if (error) {
+      setAdminMessage(`Could not remove team member: ${error.message}`);
+      setTeamMembershipBusy(null);
+      return;
+    }
+
+    setAdminMessage("Team member removed.");
+    await refreshAllData();
+    setTeamMembershipBusy(null);
+  }
+
   async function handleCreateTeam(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!canManageWorkspace) return;
@@ -3657,6 +3771,145 @@ export default function Home() {
       await loadBoardTasks();
     } finally {
       setCreatingEmailTask(false);
+    }
+  }
+
+  function getColumnTaskContext(column: DisplayColumn) {
+    const defaultProfileIds = quickProfileId
+      ? [quickProfileId]
+      : session?.user.id
+        ? [session.user.id]
+        : [];
+    const defaultTeamIds = quickTeamId ? [quickTeamId] : [];
+
+    let status = "backlog";
+    let projectId = quickProjectId || null;
+    let dueDate: string | null = null;
+    let profileIds = defaultProfileIds;
+    let teamIds = defaultTeamIds;
+
+    if (boardView === "status") {
+      status = column.id;
+    }
+
+    if (boardView === "project") {
+      projectId = column.id.startsWith("project:")
+        ? column.id.replace("project:", "")
+        : null;
+    }
+
+    if (boardView === "calendar") {
+      const calendarDueDate = dueDateForCalendarColumn(column.id);
+      dueDate = calendarDueDate === undefined ? null : calendarDueDate;
+    }
+
+    if (boardView === "assigned") {
+      profileIds = column.id.startsWith("person:")
+        ? [column.id.replace("person:", "")]
+        : [];
+    }
+
+    if (boardView === "team") {
+      teamIds = column.id.startsWith("team:")
+        ? [column.id.replace("team:", "")]
+        : [];
+    }
+
+    return {
+      status,
+      projectId,
+      dueDate,
+      profileIds,
+      teamIds,
+    };
+  }
+
+  async function createTaskFromColumn(column: DisplayColumn) {
+    if (!session?.user.id || !profile) {
+      setTaskMessage("You must be signed in before creating a task.");
+      return;
+    }
+
+    const context = getColumnTaskContext(column);
+    const title = `New task — ${column.name}`;
+    const nextSortOrder =
+      filteredBoardTasks.filter((task) => taskBelongsToColumn(task, column.id))
+        .length * 10 + 100;
+
+    setCreatingColumnTaskId(column.id);
+    setTaskMessage("");
+
+    try {
+      const { data: newTask, error: taskError } = await supabase
+        .from("tasks")
+        .insert({
+          project_id: context.projectId,
+          created_by_profile_id: session.user.id,
+          title,
+          description: null,
+          status: context.status,
+          priority: "normal",
+          due_date: context.dueDate,
+          sort_order: nextSortOrder,
+        })
+        .select("id")
+        .single();
+
+      if (taskError) {
+        setTaskMessage(`Could not create task in ${column.name}: ${taskError.message}`);
+        return;
+      }
+
+      const assignmentRows = [
+        ...context.profileIds.map((profileId) => ({
+          task_id: newTask.id,
+          profile_id: profileId,
+          team_id: null,
+          assignment_type: "person",
+        })),
+        ...context.teamIds.map((teamId) => ({
+          task_id: newTask.id,
+          profile_id: null,
+          team_id: teamId,
+          assignment_type: "team",
+        })),
+      ];
+
+      if (assignmentRows.length > 0) {
+        const { error: assigneeError } = await supabase
+          .from("task_assignees")
+          .insert(assignmentRows);
+
+        if (assigneeError) {
+          setTaskMessage(
+            `Task was created in ${column.name}, but assignment failed: ${assigneeError.message}`,
+          );
+          await loadBoardTasks();
+          return;
+        }
+      }
+
+      await logTaskActivity(
+        newTask.id,
+        "created",
+        `Created task from ${boardView} column: ${column.name}.`,
+        {
+          title,
+          board_view: boardView,
+          column_id: column.id,
+          column_name: column.name,
+          status: context.status,
+          project_id: context.projectId,
+          due_date: context.dueDate,
+          profile_ids: context.profileIds,
+          team_ids: context.teamIds,
+        },
+      );
+
+      setQuickAddMessage(`Task created in ${column.name}.`);
+      await loadBoardTasks();
+    } finally {
+      setCreatingColumnTaskId(null);
     }
   }
 
@@ -5080,6 +5333,8 @@ export default function Home() {
                         blitzitReady={blitzitReady}
                         selectedTaskIds={selectedActiveTaskIds}
                         onToggleTaskSelection={toggleActiveTaskSelection}
+                        onAddTask={createTaskFromColumn}
+                        addingTaskColumnId={creatingColumnTaskId}
                       />
                     );
                   })}
@@ -6692,6 +6947,69 @@ export default function Home() {
                                 {team.description}
                               </p>
                             )}
+
+                            <div className="mt-3 rounded-xl border border-slate-200 bg-slate-50 p-3">
+                              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                                Team Members ({getTeamMemberProfileIds(team.id).length})
+                              </p>
+
+                              <div className="mt-2 flex flex-wrap gap-2">
+                                {getTeamMemberProfileIds(team.id).length === 0 ? (
+                                  <span className="rounded-full border border-dashed border-slate-300 px-3 py-1 text-xs text-slate-500">
+                                    No members yet
+                                  </span>
+                                ) : (
+                                  getTeamMemberProfileIds(team.id).map((profileId) => (
+                                    <span
+                                      key={`${team.id}-${profileId}`}
+                                      className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1 text-xs text-slate-700"
+                                    >
+                                      {getProfileNameById(profileId)}
+                                      <button
+                                        type="button"
+                                        onClick={() => removeTeamMember(team.id, profileId)}
+                                        disabled={teamMembershipBusy === `${team.id}:${profileId}:remove`}
+                                        className="font-bold text-red-600 hover:text-red-800 disabled:text-slate-400"
+                                        title="Remove from team"
+                                      >
+                                        ×
+                                      </button>
+                                    </span>
+                                  ))
+                                )}
+                              </div>
+
+                              <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+                                <select
+                                  value={memberToAddByTeam[team.id] ?? ""}
+                                  onChange={(event) =>
+                                    setMemberToAddByTeam((current) => ({
+                                      ...current,
+                                      [team.id]: event.target.value,
+                                    }))
+                                  }
+                                  className="min-w-0 flex-1 rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs outline-none focus:border-slate-500"
+                                >
+                                  <option value="">Add user to team...</option>
+                                  {getAvailableTeamMembers(team.id).map((profileOption) => (
+                                    <option key={profileOption.id} value={profileOption.id}>
+                                      {displayProfileName(profileOption)}
+                                    </option>
+                                  ))}
+                                </select>
+                                <button
+                                  type="button"
+                                  onClick={() => addTeamMember(team.id)}
+                                  disabled={
+                                    !memberToAddByTeam[team.id] ||
+                                    teamMembershipBusy?.startsWith(`${team.id}:`)
+                                  }
+                                  className="rounded-lg bg-slate-950 px-3 py-2 text-xs font-semibold text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-400"
+                                >
+                                  Add Member
+                                </button>
+                              </div>
+                            </div>
                           </div>
                           <div className="flex shrink-0 gap-2">
                             <button
