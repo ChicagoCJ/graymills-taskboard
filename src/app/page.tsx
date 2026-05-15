@@ -10,7 +10,7 @@ import {
 } from "@dnd-kit/core";
 import { supabase } from "@/lib/supabaseClient";
 
-const APP_REVISION = "Version 3.12 — Collapsed activity below attachments";
+const APP_REVISION = "Version 3.13 — Fixed comments and author display";
 
 const statusColumns = [
   {
@@ -172,7 +172,8 @@ type TaskCommentRow = {
   id: string;
   task_id: string;
   profile_id: string | null;
-  comment_text: string;
+  comment_text: string | null;
+  comment_body?: string | null;
   created_at: string;
   commenter_name?: string;
 };
@@ -2100,7 +2101,7 @@ export default function Home() {
 
     const { data, error } = await supabase
       .from("task_comments")
-      .select("id, task_id, profile_id, comment_text, created_at")
+      .select("id, task_id, profile_id, comment_text, comment_body, created_at")
       .eq("task_id", taskId)
       .order("created_at", { ascending: true });
 
@@ -4680,6 +4681,7 @@ export default function Home() {
         task_id: selectedTask.id,
         profile_id: session.user.id,
         comment_text: cleanComment,
+        comment_body: cleanComment,
       });
 
       if (error) {
@@ -8111,14 +8113,14 @@ export default function Home() {
                     >
                       <div className="flex flex-col gap-1 md:flex-row md:items-center md:justify-between">
                         <p className="font-semibold text-slate-950">
-                          {comment.commenter_name || "Unknown user"}
+                          {`Comment by ${comment.commenter_name || "Unknown user"}`}
                         </p>
                         <p className="text-xs text-slate-500">
                           {new Date(comment.created_at).toLocaleString()}
                         </p>
                       </div>
                       <p className="mt-2 whitespace-pre-wrap text-slate-700">
-                        {comment.comment_text}
+                        {comment.comment_text || comment.comment_body || ""}
                       </p>
                     </div>
                   ))
