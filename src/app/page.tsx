@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { Session } from "@supabase/supabase-js";
 import {
   DndContext,
@@ -10,7 +10,7 @@ import {
 } from "@dnd-kit/core";
 import { supabase } from "@/lib/supabaseClient";
 
-const APP_REVISION = "Version 3.8 — Split person team and project color bars";
+const APP_REVISION = "Version 3.9 — Added top board horizontal scrollbar";
 
 const statusColumns = [
   {
@@ -473,7 +473,10 @@ function PriorityBadge({ priority }: { priority: string }) {
   );
 }
 
-function normalizeProjectColor(project: ProjectRow | undefined, fallback = "#CBD5E1") {
+function normalizeProjectColor(
+  project: ProjectRow | undefined,
+  fallback = "#CBD5E1",
+) {
   return project?.project_color || fallback;
 }
 
@@ -489,7 +492,10 @@ function SegmentedColorBar({
   const safeColors = colors.length > 0 ? colors : [fallbackColor];
 
   return (
-    <div className="flex h-1.5 overflow-hidden rounded-full bg-slate-200" title={title}>
+    <div
+      className="flex h-1.5 overflow-hidden rounded-full bg-slate-200"
+      title={title}
+    >
       {safeColors.map((color, index) => (
         <div
           key={`${title}-${color}-${index}`}
@@ -628,7 +634,11 @@ function TaskCard({
         </label>
       </div>
 
-      <TaskColorBars personColors={task.personColors} teamColors={task.teamColors} projectColor={task.projectColor} />
+      <TaskColorBars
+        personColors={task.personColors}
+        teamColors={task.teamColors}
+        projectColor={task.projectColor}
+      />
 
       <div className="mb-2 flex items-start justify-between gap-3">
         <h3 className="text-sm font-semibold leading-snug text-slate-950">
@@ -691,7 +701,10 @@ function TaskCard({
           <span>Comments: {task.commentCount}</span>
         </div>
 
-        <div className="flex gap-2" onClick={(event) => event.stopPropagation()}>
+        <div
+          className="flex gap-2"
+          onClick={(event) => event.stopPropagation()}
+        >
           <button
             type="button"
             {...listeners}
@@ -1100,7 +1113,9 @@ export default function Home() {
   const [boardTasks, setBoardTasks] = useState<BoardTask[]>([]);
   const [loadingTasks, setLoadingTasks] = useState(false);
   const [taskMessage, setTaskMessage] = useState("");
-  const [selectedActiveTaskIds, setSelectedActiveTaskIds] = useState<string[]>([]);
+  const [selectedActiveTaskIds, setSelectedActiveTaskIds] = useState<string[]>(
+    [],
+  );
   const [bulkArchivingTasks, setBulkArchivingTasks] = useState(false);
 
   const [projects, setProjects] = useState<ProjectRow[]>([]);
@@ -1111,8 +1126,12 @@ export default function Home() {
   const [adminTeams, setAdminTeams] = useState<TeamRow[]>([]);
   const [adminProfiles, setAdminProfiles] = useState<ProfileRow[]>([]);
   const [teamMemberships, setTeamMemberships] = useState<TeamMemberRow[]>([]);
-  const [memberToAddByTeam, setMemberToAddByTeam] = useState<Record<string, string>>({});
-  const [teamMembershipBusy, setTeamMembershipBusy] = useState<string | null>(null);
+  const [memberToAddByTeam, setMemberToAddByTeam] = useState<
+    Record<string, string>
+  >({});
+  const [teamMembershipBusy, setTeamMembershipBusy] = useState<string | null>(
+    null,
+  );
   const [archivedTasks, setArchivedTasks] = useState<ArchivedTask[]>([]);
   const [archivedTaskSearch, setArchivedTaskSearch] = useState("");
   const [loadingArchivedTasks, setLoadingArchivedTasks] = useState(false);
@@ -1122,8 +1141,12 @@ export default function Home() {
   const [deletingArchivedTaskId, setDeletingArchivedTaskId] = useState<
     string | null
   >(null);
-  const [selectedArchivedTaskIds, setSelectedArchivedTaskIds] = useState<string[]>([]);
-  const [bulkArchivedAction, setBulkArchivedAction] = useState<"restore" | "delete" | null>(null);
+  const [selectedArchivedTaskIds, setSelectedArchivedTaskIds] = useState<
+    string[]
+  >([]);
+  const [bulkArchivedAction, setBulkArchivedAction] = useState<
+    "restore" | "delete" | null
+  >(null);
   const [adminMessage, setAdminMessage] = useState("");
   const [backupMessage, setBackupMessage] = useState("");
   const [exportingBackup, setExportingBackup] = useState(false);
@@ -1140,9 +1163,9 @@ export default function Home() {
 
   const [editingUserId, setEditingUserId] = useState("");
   const [editUserFullName, setEditUserFullName] = useState("");
-  const [editUserRole, setEditUserRole] = useState<"admin" | "manager" | "member">(
-    "member",
-  );
+  const [editUserRole, setEditUserRole] = useState<
+    "admin" | "manager" | "member"
+  >("member");
   const [editUserColor, setEditUserColor] = useState("#2563EB");
 
   const [newProjectName, setNewProjectName] = useState("");
@@ -1172,7 +1195,9 @@ export default function Home() {
   const [quickProfileId, setQuickProfileId] = useState("");
   const [quickTeamId, setQuickTeamId] = useState("");
   const [creatingTask, setCreatingTask] = useState(false);
-  const [creatingColumnTaskId, setCreatingColumnTaskId] = useState<string | null>(null);
+  const [creatingColumnTaskId, setCreatingColumnTaskId] = useState<
+    string | null
+  >(null);
   const [quickAddMessage, setQuickAddMessage] = useState("");
 
   const [emailTaskFile, setEmailTaskFile] = useState<File | null>(null);
@@ -1241,6 +1266,9 @@ export default function Home() {
   const canManageWorkspace = isAdmin || isManager;
   const currentEmail = session?.user.email ?? "Unknown user";
 
+  const topBoardScrollRef = useRef<HTMLDivElement | null>(null);
+  const mainBoardScrollRef = useRef<HTMLDivElement | null>(null);
+
   const supabaseStatusStyle =
     supabaseUrl && supabaseKey
       ? "border-green-200 bg-green-50 text-green-800"
@@ -1306,6 +1334,24 @@ export default function Home() {
       },
     ];
   }, [boardView, profiles, teams, projects]);
+
+  const boardScrollWidth = Math.max(
+    currentBoardColumns.length * 384 +
+      Math.max(currentBoardColumns.length - 1, 0) * 16,
+    384,
+  );
+
+  function handleTopBoardScroll() {
+    if (!topBoardScrollRef.current || !mainBoardScrollRef.current) return;
+    mainBoardScrollRef.current.scrollLeft =
+      topBoardScrollRef.current.scrollLeft;
+  }
+
+  function handleMainBoardScroll() {
+    if (!topBoardScrollRef.current || !mainBoardScrollRef.current) return;
+    topBoardScrollRef.current.scrollLeft =
+      mainBoardScrollRef.current.scrollLeft;
+  }
 
   function getDefaultProjectId(projectRows: ProjectRow[]) {
     return (
@@ -1565,12 +1611,18 @@ export default function Home() {
   }, [archivedTasks, archivedTaskSearch]);
 
   const visibleSelectedActiveTaskIds = useMemo(
-    () => selectedActiveTaskIds.filter((taskId) => filteredBoardTasks.some((task) => task.id === taskId)),
+    () =>
+      selectedActiveTaskIds.filter((taskId) =>
+        filteredBoardTasks.some((task) => task.id === taskId),
+      ),
     [selectedActiveTaskIds, filteredBoardTasks],
   );
 
   const visibleSelectedArchivedTaskIds = useMemo(
-    () => selectedArchivedTaskIds.filter((taskId) => filteredArchivedTasks.some((task) => task.id === taskId)),
+    () =>
+      selectedArchivedTaskIds.filter((taskId) =>
+        filteredArchivedTasks.some((task) => task.id === taskId),
+      ),
     [selectedArchivedTaskIds, filteredArchivedTasks],
   );
 
@@ -1875,26 +1927,27 @@ export default function Home() {
   async function loadAdminData() {
     if (!canManageWorkspace) return;
 
-    const [projectResult, teamResult, profileResult, teamMembersResult] = await Promise.all([
-      supabase
-        .from("projects")
-        .select("id, name, description, status, target_date, project_color, is_active")
-        .order("is_active", { ascending: false })
-        .order("name"),
-      supabase
-        .from("teams")
-        .select("id, name, description, team_color, is_active")
-        .order("is_active", { ascending: false })
-        .order("name"),
-      supabase
-        .from("profiles")
-        .select("id, email, full_name, profile_color, role, is_active")
-        .order("is_active", { ascending: false })
-        .order("full_name"),
-      supabase
-        .from("team_members")
-        .select("team_id, profile_id"),
-    ]);
+    const [projectResult, teamResult, profileResult, teamMembersResult] =
+      await Promise.all([
+        supabase
+          .from("projects")
+          .select(
+            "id, name, description, status, target_date, project_color, is_active",
+          )
+          .order("is_active", { ascending: false })
+          .order("name"),
+        supabase
+          .from("teams")
+          .select("id, name, description, team_color, is_active")
+          .order("is_active", { ascending: false })
+          .order("name"),
+        supabase
+          .from("profiles")
+          .select("id, email, full_name, profile_color, role, is_active")
+          .order("is_active", { ascending: false })
+          .order("full_name"),
+        supabase.from("team_members").select("team_id, profile_id"),
+      ]);
 
     if (projectResult.error) {
       setAdminMessage(
@@ -2346,7 +2399,8 @@ export default function Home() {
         });
 
         const projectName = task.project_id
-          ? (projectMap.get(task.project_id)?.name ?? "Archived or missing project")
+          ? (projectMap.get(task.project_id)?.name ??
+            "Archived or missing project")
           : "No project";
 
         return {
@@ -2355,7 +2409,9 @@ export default function Home() {
           title: task.title,
           description: task.description,
           project: projectName,
-          projectColor: normalizeProjectColor(task.project_id ? projectMap.get(task.project_id) : undefined),
+          projectColor: normalizeProjectColor(
+            task.project_id ? projectMap.get(task.project_id) : undefined,
+          ),
           assignees: Array.from(new Set(assigneeNames)),
           team:
             teamNames.length > 0
@@ -2411,7 +2467,10 @@ export default function Home() {
 
       const [projectsResult, assigneesResult, profilesResult, teamsResult] =
         await Promise.all([
-          supabase.from("projects").select("id, name, project_color, is_active").order("name"),
+          supabase
+            .from("projects")
+            .select("id, name, project_color, is_active")
+            .order("name"),
           supabase
             .from("task_assignees")
             .select("task_id, assignment_type, profile_id, team_id"),
@@ -2551,7 +2610,9 @@ export default function Home() {
     setTaskMessage("");
 
     try {
-      const selectedTasks = boardTasks.filter((task) => taskIdsToArchive.includes(task.id));
+      const selectedTasks = boardTasks.filter((task) =>
+        taskIdsToArchive.includes(task.id),
+      );
 
       await Promise.all(
         selectedTasks.map((task) =>
@@ -2575,7 +2636,9 @@ export default function Home() {
       }
 
       setSelectedActiveTaskIds([]);
-      setTaskMessage(`Archived ${taskIdsToArchive.length} selected task${taskIdsToArchive.length === 1 ? "" : "s"}.`);
+      setTaskMessage(
+        `Archived ${taskIdsToArchive.length} selected task${taskIdsToArchive.length === 1 ? "" : "s"}.`,
+      );
       await Promise.all([loadBoardTasks(), loadArchivedTasks()]);
     } finally {
       setBulkArchivingTasks(false);
@@ -2604,7 +2667,9 @@ export default function Home() {
     setAdminMessage("");
 
     try {
-      const tasksToRestore = archivedTasks.filter((task) => taskIdsToRestore.includes(task.id));
+      const tasksToRestore = archivedTasks.filter((task) =>
+        taskIdsToRestore.includes(task.id),
+      );
 
       const { error } = await supabase
         .from("tasks")
@@ -2628,7 +2693,9 @@ export default function Home() {
       );
 
       setSelectedArchivedTaskIds([]);
-      setAdminMessage(`Restored ${taskIdsToRestore.length} archived task${taskIdsToRestore.length === 1 ? "" : "s"}.`);
+      setAdminMessage(
+        `Restored ${taskIdsToRestore.length} archived task${taskIdsToRestore.length === 1 ? "" : "s"}.`,
+      );
       await Promise.all([loadBoardTasks(), loadArchivedTasks()]);
     } finally {
       setBulkArchivedAction(null);
@@ -2643,7 +2710,9 @@ export default function Home() {
     );
 
     if (taskIdsToDelete.length === 0) {
-      setAdminMessage("Select one or more archived tasks to permanently delete.");
+      setAdminMessage(
+        "Select one or more archived tasks to permanently delete.",
+      );
       return;
     }
 
@@ -2658,7 +2727,9 @@ export default function Home() {
     );
 
     if (typedConfirm !== "DELETE") {
-      setAdminMessage("Permanent delete canceled. You must type DELETE exactly.");
+      setAdminMessage(
+        "Permanent delete canceled. You must type DELETE exactly.",
+      );
       return;
     }
 
@@ -2696,7 +2767,10 @@ export default function Home() {
       }
 
       const cleanupSteps: Array<{ tableName: string; label: string }> = [
-        { tableName: "notification_dismissals", label: "notification dismissals" },
+        {
+          tableName: "notification_dismissals",
+          label: "notification dismissals",
+        },
         { tableName: "task_custom_field_values", label: "custom field values" },
         { tableName: "task_tags", label: "task tags" },
         { tableName: "task_assignees", label: "task assignments" },
@@ -2726,12 +2800,16 @@ export default function Home() {
         .eq("is_archived", true);
 
       if (taskDeleteError) {
-        setAdminMessage(`Could not permanently delete selected tasks: ${taskDeleteError.message}`);
+        setAdminMessage(
+          `Could not permanently delete selected tasks: ${taskDeleteError.message}`,
+        );
         return;
       }
 
       setSelectedArchivedTaskIds([]);
-      setAdminMessage(`Permanently deleted ${taskIdsToDelete.length} archived task${taskIdsToDelete.length === 1 ? "" : "s"}.`);
+      setAdminMessage(
+        `Permanently deleted ${taskIdsToDelete.length} archived task${taskIdsToDelete.length === 1 ? "" : "s"}.`,
+      );
       await Promise.all([loadBoardTasks(), loadArchivedTasks()]);
     } finally {
       setBulkArchivedAction(null);
@@ -2769,7 +2847,9 @@ export default function Home() {
         { title: taskToRestore?.title ?? null },
       );
 
-      setSelectedArchivedTaskIds((currentIds) => currentIds.filter((id) => id !== taskId));
+      setSelectedArchivedTaskIds((currentIds) =>
+        currentIds.filter((id) => id !== taskId),
+      );
       setAdminMessage("Archived task restored to the active board.");
       await Promise.all([loadBoardTasks(), loadArchivedTasks()]);
     } finally {
@@ -2789,11 +2869,13 @@ export default function Home() {
     if (!firstConfirm) return;
 
     const typedConfirm = window.prompt(
-      'Type DELETE to permanently delete this archived task.',
+      "Type DELETE to permanently delete this archived task.",
     );
 
     if (typedConfirm !== "DELETE") {
-      setAdminMessage("Permanent delete canceled. You must type DELETE exactly.");
+      setAdminMessage(
+        "Permanent delete canceled. You must type DELETE exactly.",
+      );
       return;
     }
 
@@ -2831,7 +2913,10 @@ export default function Home() {
       }
 
       const cleanupSteps: Array<{ tableName: string; label: string }> = [
-        { tableName: "notification_dismissals", label: "notification dismissals" },
+        {
+          tableName: "notification_dismissals",
+          label: "notification dismissals",
+        },
         { tableName: "task_custom_field_values", label: "custom field values" },
         { tableName: "task_tags", label: "task tags" },
         { tableName: "task_assignees", label: "task assignments" },
@@ -2861,11 +2946,15 @@ export default function Home() {
         .eq("is_archived", true);
 
       if (taskDeleteError) {
-        setAdminMessage(`Could not permanently delete task: ${taskDeleteError.message}`);
+        setAdminMessage(
+          `Could not permanently delete task: ${taskDeleteError.message}`,
+        );
         return;
       }
 
-      setSelectedArchivedTaskIds((currentIds) => currentIds.filter((id) => id !== taskId));
+      setSelectedArchivedTaskIds((currentIds) =>
+        currentIds.filter((id) => id !== taskId),
+      );
       setAdminMessage(
         `Permanently deleted archived task${taskToDelete?.title ? `: ${taskToDelete.title}` : ""}.`,
       );
@@ -3488,7 +3577,8 @@ export default function Home() {
   }
 
   function getProfileNameById(profileId: string) {
-    const foundProfile = adminProfiles.find((profileRow) => profileRow.id === profileId) ||
+    const foundProfile =
+      adminProfiles.find((profileRow) => profileRow.id === profileId) ||
       profiles.find((profileRow) => profileRow.id === profileId);
 
     return foundProfile ? displayProfileName(foundProfile) : "Unknown user";
@@ -3499,7 +3589,8 @@ export default function Home() {
 
     return adminProfiles.filter(
       (profileRow) =>
-        profileRow.is_active !== false && !currentMemberIds.includes(profileRow.id),
+        profileRow.is_active !== false &&
+        !currentMemberIds.includes(profileRow.id),
     );
   }
 
@@ -3902,7 +3993,9 @@ export default function Home() {
     const title = `New task — ${column.name}`;
     const nextSortOrder =
       filteredBoardTasks.filter((task) => taskBelongsToColumn(task, column.id))
-        .length * 10 + 100;
+        .length *
+        10 +
+      100;
 
     setCreatingColumnTaskId(column.id);
     setTaskMessage("");
@@ -3924,7 +4017,9 @@ export default function Home() {
         .single();
 
       if (taskError) {
-        setTaskMessage(`Could not create task in ${column.name}: ${taskError.message}`);
+        setTaskMessage(
+          `Could not create task in ${column.name}: ${taskError.message}`,
+        );
         return;
       }
 
@@ -4257,7 +4352,9 @@ export default function Home() {
         return;
       }
 
-      setSelectedActiveTaskIds((currentIds) => currentIds.filter((id) => id !== selectedTask.id));
+      setSelectedActiveTaskIds((currentIds) =>
+        currentIds.filter((id) => id !== selectedTask.id),
+      );
       await loadBoardTasks();
       closeTaskEditor();
       setTaskMessage(
@@ -4625,7 +4722,8 @@ export default function Home() {
         const targetProject = newProjectId
           ? projects.find((project) => project.id === newProjectId)
           : undefined;
-        const newProjectName = targetProject?.name || (newProjectId ? "Project" : "No project");
+        const newProjectName =
+          targetProject?.name || (newProjectId ? "Project" : "No project");
         const newProjectColor = normalizeProjectColor(targetProject);
 
         setBoardTasks((currentTasks) =>
@@ -5358,7 +5456,11 @@ export default function Home() {
               <div className="flex flex-wrap gap-2">
                 <button
                   type="button"
-                  onClick={() => setSelectedActiveTaskIds(filteredBoardTasks.map((task) => task.id))}
+                  onClick={() =>
+                    setSelectedActiveTaskIds(
+                      filteredBoardTasks.map((task) => task.id),
+                    )
+                  }
                   disabled={filteredBoardTasks.length === 0}
                   className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:text-slate-400"
                 >
@@ -5375,7 +5477,9 @@ export default function Home() {
                 <button
                   type="button"
                   onClick={archiveSelectedActiveTasks}
-                  disabled={selectedActiveTaskIds.length === 0 || bulkArchivingTasks}
+                  disabled={
+                    selectedActiveTaskIds.length === 0 || bulkArchivingTasks
+                  }
                   className="rounded-xl border border-red-200 bg-white px-3 py-2 text-xs font-semibold text-red-700 hover:bg-red-50 disabled:cursor-not-allowed disabled:text-red-300"
                 >
                   {bulkArchivingTasks ? "Archiving..." : "Archive Selected"}
@@ -5383,8 +5487,24 @@ export default function Home() {
               </div>
             </div>
 
+            <div
+              ref={topBoardScrollRef}
+              onScroll={handleTopBoardScroll}
+              className="mb-3 overflow-x-auto rounded-xl border border-slate-200 bg-white px-2 py-1 shadow-sm"
+              aria-label="Board horizontal scroll"
+            >
+              <div
+                style={{ width: `${boardScrollWidth}px`, height: "1px" }}
+                aria-hidden="true"
+              />
+            </div>
+
             <DndContext onDragEnd={handleDragEnd}>
-              <div className="overflow-x-auto pb-4">
+              <div
+                ref={mainBoardScrollRef}
+                onScroll={handleMainBoardScroll}
+                className="overflow-x-auto pb-4"
+              >
                 <div className="flex min-w-max gap-4">
                   {currentBoardColumns.map((column) => {
                     const columnTasks = filteredBoardTasks.filter((task) =>
@@ -5722,7 +5842,8 @@ export default function Home() {
                   Help & Onboarding Guide
                 </h2>
                 <p className="mt-1 text-sm text-slate-600">
-                  A practical guide for new users, managers, and admins using Graymills TaskBoard.
+                  A practical guide for new users, managers, and admins using
+                  Graymills TaskBoard.
                 </p>
               </div>
               <button
@@ -5737,11 +5858,30 @@ export default function Home() {
             <div className="mb-5 rounded-2xl border border-blue-200 bg-blue-50 p-4 text-sm text-blue-950 shadow-sm">
               <p className="font-bold">New user quick start</p>
               <ol className="mt-2 list-decimal space-y-1 pl-5">
-                <li>Start in <span className="font-semibold">Status View</span> to see what work is Backlog, To Do, In Progress, Waiting, Review, or Done.</li>
-                <li>Use <span className="font-semibold">Search</span> or <span className="font-semibold">Smart Filter</span> to narrow the board.</li>
-                <li>Click <span className="font-semibold">Open</span> on a card to edit details, assignments, files, comments, reminders, and activity.</li>
-                <li>Drag cards to change the field represented by the current board view.</li>
-                <li>Use <span className="font-semibold">+ Add Task</span> at the bottom of a column to create a task already tied to that column context.</li>
+                <li>
+                  Start in <span className="font-semibold">Status View</span> to
+                  see what work is Backlog, To Do, In Progress, Waiting, Review,
+                  or Done.
+                </li>
+                <li>
+                  Use <span className="font-semibold">Search</span> or{" "}
+                  <span className="font-semibold">Smart Filter</span> to narrow
+                  the board.
+                </li>
+                <li>
+                  Click <span className="font-semibold">Open</span> on a card to
+                  edit details, assignments, files, comments, reminders, and
+                  activity.
+                </li>
+                <li>
+                  Drag cards to change the field represented by the current
+                  board view.
+                </li>
+                <li>
+                  Use <span className="font-semibold">+ Add Task</span> at the
+                  bottom of a column to create a task already tied to that
+                  column context.
+                </li>
               </ol>
             </div>
 
@@ -5751,7 +5891,10 @@ export default function Home() {
                   1. What this app is for
                 </h3>
                 <p className="mt-2 text-sm text-slate-600">
-                  Graymills TaskBoard is for shared marketing and project work. It is meant to show who owns what, what stage work is in, what is due soon, what is waiting, and what needs manager/admin attention.
+                  Graymills TaskBoard is for shared marketing and project work.
+                  It is meant to show who owns what, what stage work is in, what
+                  is due soon, what is waiting, and what needs manager/admin
+                  attention.
                 </p>
               </div>
 
@@ -5760,9 +5903,25 @@ export default function Home() {
                   2. Roles and permissions
                 </h3>
                 <div className="mt-2 space-y-2 text-sm text-slate-600">
-                  <p><span className="font-semibold text-slate-800">Admin:</span> manages users, roles, colors, projects, teams, backup/restore, archived tasks, and permanent deletes.</p>
-                  <p><span className="font-semibold text-slate-800">Manager:</span> sees all active tasks, manages projects/teams/team members, archives/restores tasks, and uses dashboard reporting.</p>
-                  <p><span className="font-semibold text-slate-800">Member:</span> works on assigned or team-visible tasks, comments, files, reminders, and personal Blitzit settings.</p>
+                  <p>
+                    <span className="font-semibold text-slate-800">Admin:</span>{" "}
+                    manages users, roles, colors, projects, teams,
+                    backup/restore, archived tasks, and permanent deletes.
+                  </p>
+                  <p>
+                    <span className="font-semibold text-slate-800">
+                      Manager:
+                    </span>{" "}
+                    sees all active tasks, manages projects/teams/team members,
+                    archives/restores tasks, and uses dashboard reporting.
+                  </p>
+                  <p>
+                    <span className="font-semibold text-slate-800">
+                      Member:
+                    </span>{" "}
+                    works on assigned or team-visible tasks, comments, files,
+                    reminders, and personal Blitzit settings.
+                  </p>
                 </div>
               </div>
 
@@ -5771,9 +5930,27 @@ export default function Home() {
                   3. Creating tasks
                 </h3>
                 <div className="mt-2 space-y-2 text-sm text-slate-600">
-                  <p><span className="font-semibold text-slate-800">Quick Add:</span> fastest way to create a task with title, project, person, and team.</p>
-                  <p><span className="font-semibold text-slate-800">Column Add Task:</span> use the + Add Task button at the bottom of a board column to prefill that column context.</p>
-                  <p><span className="font-semibold text-slate-800">Email file task:</span> drag or choose a saved .msg/.eml file to create a task and attach the email file.</p>
+                  <p>
+                    <span className="font-semibold text-slate-800">
+                      Quick Add:
+                    </span>{" "}
+                    fastest way to create a task with title, project, person,
+                    and team.
+                  </p>
+                  <p>
+                    <span className="font-semibold text-slate-800">
+                      Column Add Task:
+                    </span>{" "}
+                    use the + Add Task button at the bottom of a board column to
+                    prefill that column context.
+                  </p>
+                  <p>
+                    <span className="font-semibold text-slate-800">
+                      Email file task:
+                    </span>{" "}
+                    drag or choose a saved .msg/.eml file to create a task and
+                    attach the email file.
+                  </p>
                 </div>
               </div>
 
@@ -5782,11 +5959,38 @@ export default function Home() {
                   4. Board views
                 </h3>
                 <div className="mt-2 space-y-2 text-sm text-slate-600">
-                  <p><span className="font-semibold text-slate-800">Status:</span> workflow stage: Backlog, To Do, In Progress, Waiting, Review, Done.</p>
-                  <p><span className="font-semibold text-slate-800">Assigned To:</span> people-only workload view.</p>
-                  <p><span className="font-semibold text-slate-800">By Team:</span> team-only workload view.</p>
-                  <p><span className="font-semibold text-slate-800">Project:</span> project-by-project planning view.</p>
-                  <p><span className="font-semibold text-slate-800">Calendar:</span> due-date buckets: Overdue, Today, Tomorrow, Next 7 Days, Later, No Due Date.</p>
+                  <p>
+                    <span className="font-semibold text-slate-800">
+                      Status:
+                    </span>{" "}
+                    workflow stage: Backlog, To Do, In Progress, Waiting,
+                    Review, Done.
+                  </p>
+                  <p>
+                    <span className="font-semibold text-slate-800">
+                      Assigned To:
+                    </span>{" "}
+                    people-only workload view.
+                  </p>
+                  <p>
+                    <span className="font-semibold text-slate-800">
+                      By Team:
+                    </span>{" "}
+                    team-only workload view.
+                  </p>
+                  <p>
+                    <span className="font-semibold text-slate-800">
+                      Project:
+                    </span>{" "}
+                    project-by-project planning view.
+                  </p>
+                  <p>
+                    <span className="font-semibold text-slate-800">
+                      Calendar:
+                    </span>{" "}
+                    due-date buckets: Overdue, Today, Tomorrow, Next 7 Days,
+                    Later, No Due Date.
+                  </p>
                 </div>
               </div>
 
@@ -5795,7 +5999,11 @@ export default function Home() {
                   5. Drag and drop rules
                 </h3>
                 <p className="mt-2 text-sm text-slate-600">
-                  Dragging a card changes the field represented by the selected view. Status changes status, Assigned To changes person assignment, By Team changes team assignment, Project changes project, and Calendar changes due date. Dragging within a column changes task order.
+                  Dragging a card changes the field represented by the selected
+                  view. Status changes status, Assigned To changes person
+                  assignment, By Team changes team assignment, Project changes
+                  project, and Calendar changes due date. Dragging within a
+                  column changes task order.
                 </p>
               </div>
 
@@ -5804,7 +6012,9 @@ export default function Home() {
                   6. Opening and editing cards
                 </h3>
                 <p className="mt-2 text-sm text-slate-600">
-                  Click Open to edit task title, notes, priority, status, project, people, teams, due date, reminder date, comments, files, Blitzit copy, and activity history.
+                  Click Open to edit task title, notes, priority, status,
+                  project, people, teams, due date, reminder date, comments,
+                  files, Blitzit copy, and activity history.
                 </p>
               </div>
 
@@ -5813,7 +6023,11 @@ export default function Home() {
                   7. Search and smart filters
                 </h3>
                 <p className="mt-2 text-sm text-slate-600">
-                  Search checks task title, notes, project, assignees, teams, tags, status, priority, due-date display, and reminder notes. Smart Filters show common slices like My Tasks, Overdue, High Priority, Reminder Due, Has Files, No Due Date, and Not Copied to Blitzit.
+                  Search checks task title, notes, project, assignees, teams,
+                  tags, status, priority, due-date display, and reminder notes.
+                  Smart Filters show common slices like My Tasks, Overdue, High
+                  Priority, Reminder Due, Has Files, No Due Date, and Not Copied
+                  to Blitzit.
                 </p>
               </div>
 
@@ -5822,7 +6036,10 @@ export default function Home() {
                   8. Reminders and notifications
                 </h3>
                 <p className="mt-2 text-sm text-slate-600">
-                  Reminders are date-only. Open a card to choose Tomorrow, 1 Week, End of Week / Friday, or a custom reminder date. Due and overdue reminders appear in Notifications. Email notifications remain pending SMTP/IT setup.
+                  Reminders are date-only. Open a card to choose Tomorrow, 1
+                  Week, End of Week / Friday, or a custom reminder date. Due and
+                  overdue reminders appear in Notifications. Email notifications
+                  remain pending SMTP/IT setup.
                 </p>
               </div>
 
@@ -5831,7 +6048,11 @@ export default function Home() {
                   9. Files, comments, and activity
                 </h3>
                 <p className="mt-2 text-sm text-slate-600">
-                  Attach Word documents, PDFs, images, email files, and other supporting files inside a task. Use Comments for team discussion. Activity shows key changes including task edits, assignments, file changes, comments, archive/restore actions, and Blitzit copies.
+                  Attach Word documents, PDFs, images, email files, and other
+                  supporting files inside a task. Use Comments for team
+                  discussion. Activity shows key changes including task edits,
+                  assignments, file changes, comments, archive/restore actions,
+                  and Blitzit copies.
                 </p>
               </div>
 
@@ -5840,7 +6061,9 @@ export default function Home() {
                   10. Blitzit
                 </h3>
                 <p className="mt-2 text-sm text-slate-600">
-                  Save your personal Blitzit webhook settings in Settings. Use Copy or Re-copy on a task to send it one-way to Blitzit. TaskBoard does not sync changes back from Blitzit.
+                  Save your personal Blitzit webhook settings in Settings. Use
+                  Copy or Re-copy on a task to send it one-way to Blitzit.
+                  TaskBoard does not sync changes back from Blitzit.
                 </p>
               </div>
 
@@ -5849,7 +6072,10 @@ export default function Home() {
                   11. Admin and manager tools
                 </h3>
                 <p className="mt-2 text-sm text-slate-600">
-                  Admin and Manager panels include projects, teams, team membership, archived tasks, and reporting tools. Admins also control users, roles, profile colors, backups, restore, and permanent cleanup.
+                  Admin and Manager panels include projects, teams, team
+                  membership, archived tasks, and reporting tools. Admins also
+                  control users, roles, profile colors, backups, restore, and
+                  permanent cleanup.
                 </p>
               </div>
 
@@ -5858,7 +6084,10 @@ export default function Home() {
                   12. Archive vs. delete
                 </h3>
                 <p className="mt-2 text-sm text-slate-600">
-                  Archive hides a task from active boards while preserving history. Admins can restore archived tasks. Delete Forever is only available for archived tasks and requires confirmation plus typing DELETE.
+                  Archive hides a task from active boards while preserving
+                  history. Admins can restore archived tasks. Delete Forever is
+                  only available for archived tasks and requires confirmation
+                  plus typing DELETE.
                 </p>
               </div>
             </div>
@@ -5871,7 +6100,10 @@ export default function Home() {
                 <ul className="list-disc space-y-1 pl-5">
                   <li>Who should use TaskBoard and for what kinds of work.</li>
                   <li>What each role can and cannot do.</li>
-                  <li>When to use Status, Assigned To, By Team, Project, and Calendar views.</li>
+                  <li>
+                    When to use Status, Assigned To, By Team, Project, and
+                    Calendar views.
+                  </li>
                   <li>How projects and teams should be named.</li>
                   <li>When tasks should be archived instead of deleted.</li>
                 </ul>
@@ -5880,7 +6112,10 @@ export default function Home() {
                   <li>How comments should be used versus notes.</li>
                   <li>What file types are appropriate to attach.</li>
                   <li>How Blitzit copying works and what it does not do.</li>
-                  <li>Who to contact for access, role changes, or team membership changes.</li>
+                  <li>
+                    Who to contact for access, role changes, or team membership
+                    changes.
+                  </li>
                 </ul>
               </div>
             </div>
@@ -6245,14 +6480,14 @@ export default function Home() {
                     reminders, files, comments, admin, and Blitzit instructions
                     added
                   </li>
+                  <li>• Manager role added between Admin and Member</li>
                   <li>
-                    • Manager role added between Admin and Member
+                    • Managers can see all active tasks and manage projects,
+                    teams, archives, and task workflow
                   </li>
                   <li>
-                    • Managers can see all active tasks and manage projects, teams, archives, and task workflow
-                  </li>
-                  <li>
-                    • User management, backup/restore, and permanent delete remain admin-only
+                    • User management, backup/restore, and permanent delete
+                    remain admin-only
                   </li>
                 </ul>
               </div>
@@ -6268,7 +6503,9 @@ export default function Home() {
               <div className="mb-4 flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
                 <div>
                   <h2 className="text-xl font-bold text-slate-950">
-                    {isAdmin ? "Admin: Users, Projects, Teams & Archives" : "Manager: Projects, Teams & Archives"}
+                    {isAdmin
+                      ? "Admin: Users, Projects, Teams & Archives"
+                      : "Manager: Projects, Teams & Archives"}
                   </h2>
                   <p className="text-sm text-slate-600">
                     {isAdmin
@@ -6301,110 +6538,113 @@ export default function Home() {
               )}
 
               {isAdmin && (
-              <div className="mb-5 rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
-                  <div className="max-w-2xl">
-                    <h3 className="font-bold text-slate-950">
-                      Backup / Restore
-                    </h3>
-                    <p className="mt-1 text-sm text-slate-600">
-                      Export a JSON backup or restore a previous TaskBoard
-                      backup. Restore uses a merge/upsert approach: matching
-                      saved IDs are updated, missing records are added, and
-                      records not found in the backup are not deleted.
-                    </p>
-                    <p className="mt-1 text-xs text-slate-500">
-                      Blitzit secrets and uploaded file contents are not
-                      included. Attachment metadata is included, but file
-                      binaries are not restored.
-                    </p>
-                  </div>
-
-                  <div className="flex flex-col gap-2 sm:flex-row">
-                    <button
-                      type="button"
-                      onClick={handleExportBackup}
-                      disabled={exportingBackup || restoringBackup}
-                      className="rounded-xl bg-slate-950 px-4 py-3 text-sm font-semibold text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-400"
-                    >
-                      {exportingBackup ? "Exporting..." : "Export Backup"}
-                    </button>
-
-                    <label className="cursor-pointer rounded-xl border border-slate-300 bg-white px-4 py-3 text-center text-sm font-semibold text-slate-700 hover:bg-slate-50">
-                      Choose Restore File
-                      <input
-                        type="file"
-                        accept="application/json,.json"
-                        onChange={handleRestoreFileSelected}
-                        className="hidden"
-                      />
-                    </label>
-                  </div>
-                </div>
-
-                {restoreFileName && (
-                  <div className="mt-4 rounded-xl border border-blue-200 bg-blue-50 p-3 text-sm text-blue-950">
-                    Restore file selected:{" "}
-                    <span className="font-semibold">{restoreFileName}</span>
-                  </div>
-                )}
-
-                {restorePreview && (
-                  <div className="mt-4 rounded-2xl border border-slate-200 bg-white p-4">
-                    <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-                      <div>
-                        <p className="font-semibold text-slate-950">
-                          Restore preview
-                        </p>
-                        <p className="text-xs text-slate-500">
-                          Review these row counts before restoring. Restore does
-                          not delete records that are missing from the backup.
-                        </p>
-                      </div>
-                      <div className="flex gap-2">
-                        <button
-                          type="button"
-                          onClick={handleRestoreBackup}
-                          disabled={restoringBackup}
-                          className="rounded-xl bg-red-700 px-4 py-3 text-sm font-semibold text-white hover:bg-red-800 disabled:cursor-not-allowed disabled:bg-red-300"
-                        >
-                          {restoringBackup ? "Restoring..." : "Restore Backup"}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={clearRestorePreview}
-                          disabled={restoringBackup}
-                          className="rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-50"
-                        >
-                          Cancel Restore
-                        </button>
-                      </div>
+                <div className="mb-5 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                  <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+                    <div className="max-w-2xl">
+                      <h3 className="font-bold text-slate-950">
+                        Backup / Restore
+                      </h3>
+                      <p className="mt-1 text-sm text-slate-600">
+                        Export a JSON backup or restore a previous TaskBoard
+                        backup. Restore uses a merge/upsert approach: matching
+                        saved IDs are updated, missing records are added, and
+                        records not found in the backup are not deleted.
+                      </p>
+                      <p className="mt-1 text-xs text-slate-500">
+                        Blitzit secrets and uploaded file contents are not
+                        included. Attachment metadata is included, but file
+                        binaries are not restored.
+                      </p>
                     </div>
 
-                    <div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-                      {Object.entries(restorePreview).map(
-                        ([tableName, rowCount]) => (
-                          <div
-                            key={tableName}
-                            className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs text-slate-700"
+                    <div className="flex flex-col gap-2 sm:flex-row">
+                      <button
+                        type="button"
+                        onClick={handleExportBackup}
+                        disabled={exportingBackup || restoringBackup}
+                        className="rounded-xl bg-slate-950 px-4 py-3 text-sm font-semibold text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-400"
+                      >
+                        {exportingBackup ? "Exporting..." : "Export Backup"}
+                      </button>
+
+                      <label className="cursor-pointer rounded-xl border border-slate-300 bg-white px-4 py-3 text-center text-sm font-semibold text-slate-700 hover:bg-slate-50">
+                        Choose Restore File
+                        <input
+                          type="file"
+                          accept="application/json,.json"
+                          onChange={handleRestoreFileSelected}
+                          className="hidden"
+                        />
+                      </label>
+                    </div>
+                  </div>
+
+                  {restoreFileName && (
+                    <div className="mt-4 rounded-xl border border-blue-200 bg-blue-50 p-3 text-sm text-blue-950">
+                      Restore file selected:{" "}
+                      <span className="font-semibold">{restoreFileName}</span>
+                    </div>
+                  )}
+
+                  {restorePreview && (
+                    <div className="mt-4 rounded-2xl border border-slate-200 bg-white p-4">
+                      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                        <div>
+                          <p className="font-semibold text-slate-950">
+                            Restore preview
+                          </p>
+                          <p className="text-xs text-slate-500">
+                            Review these row counts before restoring. Restore
+                            does not delete records that are missing from the
+                            backup.
+                          </p>
+                        </div>
+                        <div className="flex gap-2">
+                          <button
+                            type="button"
+                            onClick={handleRestoreBackup}
+                            disabled={restoringBackup}
+                            className="rounded-xl bg-red-700 px-4 py-3 text-sm font-semibold text-white hover:bg-red-800 disabled:cursor-not-allowed disabled:bg-red-300"
                           >
-                            <p className="font-semibold text-slate-950">
-                              {tableName}
-                            </p>
-                            <p>{rowCount} rows</p>
-                          </div>
-                        ),
-                      )}
-                    </div>
-                  </div>
-                )}
+                            {restoringBackup
+                              ? "Restoring..."
+                              : "Restore Backup"}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={clearRestorePreview}
+                            disabled={restoringBackup}
+                            className="rounded-xl border border-slate-300 bg-white px-4 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+                          >
+                            Cancel Restore
+                          </button>
+                        </div>
+                      </div>
 
-                {backupMessage && (
-                  <div className="mt-3 rounded-xl border border-slate-200 bg-white p-3 text-sm text-slate-700">
-                    {backupMessage}
-                  </div>
-                )}
-              </div>
+                      <div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                        {Object.entries(restorePreview).map(
+                          ([tableName, rowCount]) => (
+                            <div
+                              key={tableName}
+                              className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs text-slate-700"
+                            >
+                              <p className="font-semibold text-slate-950">
+                                {tableName}
+                              </p>
+                              <p>{rowCount} rows</p>
+                            </div>
+                          ),
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {backupMessage && (
+                    <div className="mt-3 rounded-xl border border-slate-200 bg-white p-3 text-sm text-slate-700">
+                      {backupMessage}
+                    </div>
+                  )}
+                </div>
               )}
 
               <div className="mb-5 rounded-2xl border border-slate-200 bg-slate-50 p-4">
@@ -6412,7 +6652,9 @@ export default function Home() {
                   <div>
                     <h3 className="font-bold text-slate-950">Archived Tasks</h3>
                     <p className="mt-1 text-sm text-slate-600">
-                      Restore accidentally archived tasks, or permanently delete old archived tasks after a second confirmation. Archived tasks are hidden from the active board until restored.
+                      Restore accidentally archived tasks, or permanently delete
+                      old archived tasks after a second confirmation. Archived
+                      tasks are hidden from the active board until restored.
                     </p>
                   </div>
                   <div className="flex flex-col gap-2 sm:flex-row">
@@ -6443,7 +6685,8 @@ export default function Home() {
                         {filteredArchivedTasks.length === 1 ? "" : "s"}
                       </p>
                       <p className="mt-1 text-xs text-slate-500">
-                        {visibleSelectedArchivedTaskIds.length} selected on this archived-task view
+                        {visibleSelectedArchivedTaskIds.length} selected on this
+                        archived-task view
                       </p>
                     </div>
                     <div className="flex flex-wrap gap-2">
@@ -6458,7 +6701,11 @@ export default function Home() {
                       )}
                       <button
                         type="button"
-                        onClick={() => setSelectedArchivedTaskIds(filteredArchivedTasks.map((task) => task.id))}
+                        onClick={() =>
+                          setSelectedArchivedTaskIds(
+                            filteredArchivedTasks.map((task) => task.id),
+                          )
+                        }
                         disabled={filteredArchivedTasks.length === 0}
                         className="rounded-lg border border-slate-200 px-2 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:text-slate-400"
                       >
@@ -6475,19 +6722,29 @@ export default function Home() {
                       <button
                         type="button"
                         onClick={restoreSelectedArchivedTasks}
-                        disabled={selectedArchivedTaskIds.length === 0 || bulkArchivedAction !== null}
+                        disabled={
+                          selectedArchivedTaskIds.length === 0 ||
+                          bulkArchivedAction !== null
+                        }
                         className="rounded-lg border border-green-200 bg-white px-2 py-1 text-xs font-semibold text-green-700 hover:bg-green-50 disabled:cursor-not-allowed disabled:text-green-300"
                       >
-                        {bulkArchivedAction === "restore" ? "Restoring..." : "Restore Selected"}
+                        {bulkArchivedAction === "restore"
+                          ? "Restoring..."
+                          : "Restore Selected"}
                       </button>
                       {isAdmin && (
                         <button
                           type="button"
                           onClick={permanentlyDeleteSelectedArchivedTasks}
-                          disabled={selectedArchivedTaskIds.length === 0 || bulkArchivedAction !== null}
+                          disabled={
+                            selectedArchivedTaskIds.length === 0 ||
+                            bulkArchivedAction !== null
+                          }
                           className="rounded-lg border border-red-200 bg-white px-2 py-1 text-xs font-semibold text-red-700 hover:bg-red-50 disabled:cursor-not-allowed disabled:text-red-300"
                         >
-                          {bulkArchivedAction === "delete" ? "Deleting..." : "Delete Selected Forever"}
+                          {bulkArchivedAction === "delete"
+                            ? "Deleting..."
+                            : "Delete Selected Forever"}
                         </button>
                       )}
                     </div>
@@ -6511,8 +6768,12 @@ export default function Home() {
                               <label className="mb-2 inline-flex items-center gap-2 text-xs font-semibold text-slate-600">
                                 <input
                                   type="checkbox"
-                                  checked={selectedArchivedTaskIds.includes(task.id)}
-                                  onChange={() => toggleArchivedTaskSelection(task.id)}
+                                  checked={selectedArchivedTaskIds.includes(
+                                    task.id,
+                                  )}
+                                  onChange={() =>
+                                    toggleArchivedTaskSelection(task.id)
+                                  }
                                   className="h-4 w-4 rounded border-slate-300"
                                 />
                                 Select
@@ -6583,7 +6844,9 @@ export default function Home() {
                               {isAdmin && (
                                 <button
                                   type="button"
-                                  onClick={() => permanentlyDeleteArchivedTask(task.id)}
+                                  onClick={() =>
+                                    permanentlyDeleteArchivedTask(task.id)
+                                  }
                                   disabled={
                                     restoringArchivedTaskId === task.id ||
                                     deletingArchivedTaskId === task.id
@@ -6606,141 +6869,144 @@ export default function Home() {
 
               <div className="grid gap-5 xl:grid-cols-3">
                 {isAdmin && (
-                <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                  <h3 className="font-bold text-slate-950">Users</h3>
-                  <p className="mt-1 text-sm text-slate-600">
-                    Edit display names, roles, profile colors, and active
-                    status.
-                  </p>
+                  <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                    <h3 className="font-bold text-slate-950">Users</h3>
+                    <p className="mt-1 text-sm text-slate-600">
+                      Edit display names, roles, profile colors, and active
+                      status.
+                    </p>
 
-                  {editingUserId && (
-                    <form
-                      onSubmit={handleSaveUser}
-                      className="mt-3 space-y-3 rounded-2xl border border-blue-200 bg-blue-50 p-4"
-                    >
-                      <p className="text-sm font-semibold text-blue-950">
-                        Edit user
-                      </p>
-                      <input
-                        className="w-full rounded-xl border border-blue-200 px-4 py-3 text-sm outline-none focus:border-blue-500"
-                        placeholder="Full name"
-                        value={editUserFullName}
-                        onChange={(event) =>
-                          setEditUserFullName(event.target.value)
-                        }
-                      />
-                      <div className="grid gap-3 md:grid-cols-2">
-                        <select
-                          className="rounded-xl border border-blue-200 px-4 py-3 text-sm outline-none focus:border-blue-500"
-                          value={editUserRole}
-                          onChange={(event) =>
-                            setEditUserRole(
-                              event.target.value as "admin" | "manager" | "member",
-                            )
-                          }
-                        >
-                          <option value="member">Member</option>
-                          <option value="manager">Manager</option>
-                          <option value="admin">Admin</option>
-                        </select>
-                        <div className="flex items-center gap-3 rounded-xl border border-blue-200 bg-white px-3 py-2">
-                          <input
-                            type="color"
-                            value={editUserColor}
-                            onChange={(event) =>
-                              setEditUserColor(event.target.value)
-                            }
-                            className="h-10 w-14 rounded-lg border border-blue-200"
-                          />
-                          <span className="text-sm text-blue-950">
-                            {editUserColor}
-                          </span>
-                        </div>
-                      </div>
-                      <div className="flex gap-2">
-                        <button className="rounded-xl bg-blue-950 px-4 py-3 text-sm font-semibold text-white hover:bg-blue-900">
-                          Save User
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setEditingUserId("")}
-                          className="rounded-xl border border-blue-200 bg-white px-4 py-3 text-sm font-semibold text-blue-950 hover:bg-blue-50"
-                        >
-                          Cancel
-                        </button>
-                      </div>
-                    </form>
-                  )}
-
-                  <div className="mt-4 space-y-2">
-                    {adminProfiles.map((userProfile) => (
-                      <div
-                        key={userProfile.id}
-                        className={`rounded-xl border p-3 text-sm ${
-                          userProfile.is_active !== false
-                            ? "border-slate-200 bg-white"
-                            : "border-slate-200 bg-slate-100 opacity-70"
-                        }`}
+                    {editingUserId && (
+                      <form
+                        onSubmit={handleSaveUser}
+                        className="mt-3 space-y-3 rounded-2xl border border-blue-200 bg-blue-50 p-4"
                       >
-                        <div className="flex items-start justify-between gap-3">
-                          <div>
-                            <div className="flex items-center gap-2">
-                              <span
-                                className="h-3 w-8 rounded-full"
-                                style={{
-                                  backgroundColor:
-                                    userProfile.profile_color || "#2563EB",
-                                }}
-                              />
-                              <p className="font-semibold text-slate-950">
-                                {displayProfileName(userProfile)}
+                        <p className="text-sm font-semibold text-blue-950">
+                          Edit user
+                        </p>
+                        <input
+                          className="w-full rounded-xl border border-blue-200 px-4 py-3 text-sm outline-none focus:border-blue-500"
+                          placeholder="Full name"
+                          value={editUserFullName}
+                          onChange={(event) =>
+                            setEditUserFullName(event.target.value)
+                          }
+                        />
+                        <div className="grid gap-3 md:grid-cols-2">
+                          <select
+                            className="rounded-xl border border-blue-200 px-4 py-3 text-sm outline-none focus:border-blue-500"
+                            value={editUserRole}
+                            onChange={(event) =>
+                              setEditUserRole(
+                                event.target.value as
+                                  | "admin"
+                                  | "manager"
+                                  | "member",
+                              )
+                            }
+                          >
+                            <option value="member">Member</option>
+                            <option value="manager">Manager</option>
+                            <option value="admin">Admin</option>
+                          </select>
+                          <div className="flex items-center gap-3 rounded-xl border border-blue-200 bg-white px-3 py-2">
+                            <input
+                              type="color"
+                              value={editUserColor}
+                              onChange={(event) =>
+                                setEditUserColor(event.target.value)
+                              }
+                              className="h-10 w-14 rounded-lg border border-blue-200"
+                            />
+                            <span className="text-sm text-blue-950">
+                              {editUserColor}
+                            </span>
+                          </div>
+                        </div>
+                        <div className="flex gap-2">
+                          <button className="rounded-xl bg-blue-950 px-4 py-3 text-sm font-semibold text-white hover:bg-blue-900">
+                            Save User
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setEditingUserId("")}
+                            className="rounded-xl border border-blue-200 bg-white px-4 py-3 text-sm font-semibold text-blue-950 hover:bg-blue-50"
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      </form>
+                    )}
+
+                    <div className="mt-4 space-y-2">
+                      {adminProfiles.map((userProfile) => (
+                        <div
+                          key={userProfile.id}
+                          className={`rounded-xl border p-3 text-sm ${
+                            userProfile.is_active !== false
+                              ? "border-slate-200 bg-white"
+                              : "border-slate-200 bg-slate-100 opacity-70"
+                          }`}
+                        >
+                          <div className="flex items-start justify-between gap-3">
+                            <div>
+                              <div className="flex items-center gap-2">
+                                <span
+                                  className="h-3 w-8 rounded-full"
+                                  style={{
+                                    backgroundColor:
+                                      userProfile.profile_color || "#2563EB",
+                                  }}
+                                />
+                                <p className="font-semibold text-slate-950">
+                                  {displayProfileName(userProfile)}
+                                </p>
+                              </div>
+                              <p className="mt-1 text-xs text-slate-500">
+                                {userProfile.email || "No email"}
+                              </p>
+                              <p className="mt-1 text-xs text-slate-500">
+                                Role: {userProfile.role || "member"} ·{" "}
+                                {userProfile.is_active !== false
+                                  ? "Active"
+                                  : "Inactive"}
                               </p>
                             </div>
-                            <p className="mt-1 text-xs text-slate-500">
-                              {userProfile.email || "No email"}
-                            </p>
-                            <p className="mt-1 text-xs text-slate-500">
-                              Role: {userProfile.role || "member"} ·{" "}
-                              {userProfile.is_active !== false
-                                ? "Active"
-                                : "Inactive"}
-                            </p>
-                          </div>
-                          <div className="flex shrink-0 flex-wrap justify-end gap-2">
-                            <button
-                              type="button"
-                              onClick={() => startEditUser(userProfile)}
-                              className="rounded-lg border border-slate-200 px-2 py-1 text-xs font-semibold hover:bg-slate-50"
-                            >
-                              Edit
-                            </button>
-                            {userProfile.is_active !== false ? (
+                            <div className="flex shrink-0 flex-wrap justify-end gap-2">
                               <button
                                 type="button"
-                                onClick={() =>
-                                  setUserActive(userProfile.id, false)
-                                }
-                                className="rounded-lg border border-red-200 px-2 py-1 text-xs font-semibold text-red-700 hover:bg-red-50"
+                                onClick={() => startEditUser(userProfile)}
+                                className="rounded-lg border border-slate-200 px-2 py-1 text-xs font-semibold hover:bg-slate-50"
                               >
-                                Deactivate
+                                Edit
                               </button>
-                            ) : (
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  setUserActive(userProfile.id, true)
-                                }
-                                className="rounded-lg border border-green-200 px-2 py-1 text-xs font-semibold text-green-700 hover:bg-green-50"
-                              >
-                                Activate
-                              </button>
-                            )}
+                              {userProfile.is_active !== false ? (
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    setUserActive(userProfile.id, false)
+                                  }
+                                  className="rounded-lg border border-red-200 px-2 py-1 text-xs font-semibold text-red-700 hover:bg-red-50"
+                                >
+                                  Deactivate
+                                </button>
+                              ) : (
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    setUserActive(userProfile.id, true)
+                                  }
+                                  className="rounded-lg border border-green-200 px-2 py-1 text-xs font-semibold text-green-700 hover:bg-green-50"
+                                >
+                                  Activate
+                                </button>
+                              )}
+                            </div>
                           </div>
                         </div>
-                      </div>
-                    ))}
+                      ))}
+                    </div>
                   </div>
-                </div>
                 )}
 
                 <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
@@ -6795,7 +7061,9 @@ export default function Home() {
                       <input
                         type="color"
                         value={newProjectColor}
-                        onChange={(event) => setNewProjectColor(event.target.value)}
+                        onChange={(event) =>
+                          setNewProjectColor(event.target.value)
+                        }
                         className="h-11 w-16 rounded-lg border border-slate-300"
                       />
                       <span className="text-sm text-slate-600">
@@ -6856,7 +7124,9 @@ export default function Home() {
                         <input
                           type="color"
                           value={editProjectColor}
-                          onChange={(event) => setEditProjectColor(event.target.value)}
+                          onChange={(event) =>
+                            setEditProjectColor(event.target.value)
+                          }
                           className="h-11 w-16 rounded-lg border border-blue-200"
                         />
                         <span className="text-sm text-blue-950">
@@ -6893,7 +7163,10 @@ export default function Home() {
                             <div className="flex items-center gap-2">
                               <span
                                 className="h-3 w-8 rounded-full border border-slate-200"
-                                style={{ backgroundColor: project.project_color || "#CBD5E1" }}
+                                style={{
+                                  backgroundColor:
+                                    project.project_color || "#CBD5E1",
+                                }}
                               />
                               <p className="font-semibold text-slate-950">
                                 {project.name}
@@ -7065,32 +7338,41 @@ export default function Home() {
 
                             <div className="mt-3 rounded-xl border border-slate-200 bg-slate-50 p-3">
                               <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                                Team Members ({getTeamMemberProfileIds(team.id).length})
+                                Team Members (
+                                {getTeamMemberProfileIds(team.id).length})
                               </p>
 
                               <div className="mt-2 flex flex-wrap gap-2">
-                                {getTeamMemberProfileIds(team.id).length === 0 ? (
+                                {getTeamMemberProfileIds(team.id).length ===
+                                0 ? (
                                   <span className="rounded-full border border-dashed border-slate-300 px-3 py-1 text-xs text-slate-500">
                                     No members yet
                                   </span>
                                 ) : (
-                                  getTeamMemberProfileIds(team.id).map((profileId) => (
-                                    <span
-                                      key={`${team.id}-${profileId}`}
-                                      className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1 text-xs text-slate-700"
-                                    >
-                                      {getProfileNameById(profileId)}
-                                      <button
-                                        type="button"
-                                        onClick={() => removeTeamMember(team.id, profileId)}
-                                        disabled={teamMembershipBusy === `${team.id}:${profileId}:remove`}
-                                        className="font-bold text-red-600 hover:text-red-800 disabled:text-slate-400"
-                                        title="Remove from team"
+                                  getTeamMemberProfileIds(team.id).map(
+                                    (profileId) => (
+                                      <span
+                                        key={`${team.id}-${profileId}`}
+                                        className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1 text-xs text-slate-700"
                                       >
-                                        ×
-                                      </button>
-                                    </span>
-                                  ))
+                                        {getProfileNameById(profileId)}
+                                        <button
+                                          type="button"
+                                          onClick={() =>
+                                            removeTeamMember(team.id, profileId)
+                                          }
+                                          disabled={
+                                            teamMembershipBusy ===
+                                            `${team.id}:${profileId}:remove`
+                                          }
+                                          className="font-bold text-red-600 hover:text-red-800 disabled:text-slate-400"
+                                          title="Remove from team"
+                                        >
+                                          ×
+                                        </button>
+                                      </span>
+                                    ),
+                                  )
                                 )}
                               </div>
 
@@ -7106,18 +7388,25 @@ export default function Home() {
                                   className="min-w-0 flex-1 rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs outline-none focus:border-slate-500"
                                 >
                                   <option value="">Add user to team...</option>
-                                  {getAvailableTeamMembers(team.id).map((profileOption) => (
-                                    <option key={profileOption.id} value={profileOption.id}>
-                                      {displayProfileName(profileOption)}
-                                    </option>
-                                  ))}
+                                  {getAvailableTeamMembers(team.id).map(
+                                    (profileOption) => (
+                                      <option
+                                        key={profileOption.id}
+                                        value={profileOption.id}
+                                      >
+                                        {displayProfileName(profileOption)}
+                                      </option>
+                                    ),
+                                  )}
                                 </select>
                                 <button
                                   type="button"
                                   onClick={() => addTeamMember(team.id)}
                                   disabled={
                                     !memberToAddByTeam[team.id] ||
-                                    teamMembershipBusy?.startsWith(`${team.id}:`)
+                                    teamMembershipBusy?.startsWith(
+                                      `${team.id}:`,
+                                    )
                                   }
                                   className="rounded-lg bg-slate-950 px-3 py-2 text-xs font-semibold text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-400"
                                 >
@@ -7194,7 +7483,11 @@ export default function Home() {
               </div>
             </div>
 
-            <form id="task-edit-form" onSubmit={saveTaskEdits} className="space-y-4">
+            <form
+              id="task-edit-form"
+              onSubmit={saveTaskEdits}
+              className="space-y-4"
+            >
               <div>
                 <label className="text-sm font-semibold text-slate-900">
                   Task title
