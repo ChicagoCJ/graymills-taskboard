@@ -10,7 +10,7 @@ import {
 } from "@dnd-kit/core";
 import { supabase } from "@/lib/supabaseClient";
 
-const APP_REVISION = "Version 3.9 — Added top board horizontal scrollbar";
+const APP_REVISION = "Version 3.10 — Added subtasks and checklists";
 
 const statusColumns = [
   {
@@ -74,6 +74,7 @@ const smartFilterOptions = [
   { id: "no-assignee", label: "No Assignee" },
   { id: "not-copied", label: "Not Copied to Blitzit" },
   { id: "has-files", label: "Has Files" },
+  { id: "has-subtasks", label: "Has Subtasks" },
   { id: "no-due-date", label: "No Due Date" },
   { id: "has-reminder", label: "Has Reminder" },
   { id: "reminder-due", label: "Reminder Due" },
@@ -176,6 +177,19 @@ type TaskCommentRow = {
   commenter_name?: string;
 };
 
+type TaskSubtaskRow = {
+  id: string;
+  task_id: string;
+  created_by_profile_id: string | null;
+  title: string;
+  is_done: boolean;
+  sort_order: number;
+  created_at: string;
+  updated_at?: string | null;
+  completed_at?: string | null;
+  creator_name?: string;
+};
+
 type TaskActivityRow = {
   id: string;
   task_id: string;
@@ -227,6 +241,8 @@ type BoardTask = {
   assignedTeamIds: string[];
   attachmentCount: number;
   commentCount: number;
+  subtaskCount: number;
+  completedSubtaskCount: number;
   blitzitCopiedAt: string | null;
 };
 
@@ -699,6 +715,7 @@ function TaskCard({
         <div className="flex gap-3">
           <span>Files: {task.attachmentCount}</span>
           <span>Comments: {task.commentCount}</span>
+          <span>Subtasks: {task.completedSubtaskCount}/{task.subtaskCount}</span>
         </div>
 
         <div
@@ -1232,6 +1249,11 @@ export default function Home() {
   const [savingComment, setSavingComment] = useState(false);
   const [commentMessage, setCommentMessage] = useState("");
 
+  const [subtasks, setSubtasks] = useState<TaskSubtaskRow[]>([]);
+  const [newSubtaskTitle, setNewSubtaskTitle] = useState("");
+  const [savingSubtask, setSavingSubtask] = useState(false);
+  const [subtaskMessage, setSubtaskMessage] = useState("");
+
   const [activities, setActivities] = useState<TaskActivityRow[]>([]);
   const [activityMessage, setActivityMessage] = useState("");
 
@@ -1546,6 +1568,7 @@ export default function Home() {
       );
     if (activeSmartFilter === "not-copied") return !task.blitzitCopiedAt;
     if (activeSmartFilter === "has-files") return task.attachmentCount > 0;
+    if (activeSmartFilter === "has-subtasks") return task.subtaskCount > 0;
     if (activeSmartFilter === "no-due-date") return !task.dueRaw;
     if (activeSmartFilter === "has-reminder") return Boolean(task.reminderAt);
     if (activeSmartFilter === "reminder-due")
@@ -1572,6 +1595,7 @@ export default function Home() {
       task.due,
       formatReminderDate(task.reminderAt),
       task.reminderNote ?? "",
+      `${task.completedSubtaskCount}/${task.subtaskCount} subtasks`,
     ]
       .join(" ")
       .toLowerCase();
@@ -1815,6 +1839,7 @@ export default function Home() {
       Tags: task.tags.join("; "),
       Files: task.attachmentCount,
       Comments: task.commentCount,
+      Subtasks: `${task.completedSubtaskCount}/${task.subtaskCount}`,
       "Copied to Blitzit": task.blitzitCopiedAt ? "Yes" : "No",
       "Task ID": task.id,
     };
@@ -2119,6 +2144,59 @@ export default function Home() {
     );
   }
 
+  async function loadSubtasks(taskId: string) {
+    setSubtaskMessage("");
+
+    const { data, error } = await supabase
+      .from("task_subtasks")
+      .select(
+        "id, task_id, created_by_profile_id, title, is_done, sort_order, created_at, updated_at, completed_at",
+      )
+      .eq("task_id", taskId)
+      .order("sort_order", { ascending: true })
+      .order("created_at", { ascending: true });
+
+    if (error) {
+      setSubtaskMessage(`Could not load subtasks: ${error.message}`);
+      setSubtasks([]);
+      return;
+    }
+
+    const rawSubtasks = (data ?? []) as TaskSubtaskRow[];
+    const profileIds = Array.from(
+      new Set(
+        rawSubtasks
+          .map((subtask) => subtask.created_by_profile_id)
+          .filter(Boolean) as string[],
+      ),
+    );
+
+    let creatorMap = new Map<string, string>();
+
+    if (profileIds.length > 0) {
+      const { data: creatorProfiles } = await supabase
+        .from("profiles")
+        .select("id, email, full_name, profile_color")
+        .in("id", profileIds);
+
+      creatorMap = new Map(
+        ((creatorProfiles ?? []) as ProfileRow[]).map((profileRow) => [
+          profileRow.id,
+          displayProfileName(profileRow),
+        ]),
+      );
+    }
+
+    setSubtasks(
+      rawSubtasks.map((subtask) => ({
+        ...subtask,
+        creator_name: subtask.created_by_profile_id
+          ? (creatorMap.get(subtask.created_by_profile_id) ?? "Unknown user")
+          : "Unknown user",
+      })),
+    );
+  }
+
   async function loadActivity(taskId: string) {
     setActivityMessage("");
 
@@ -2221,6 +2299,7 @@ export default function Home() {
         tagsResult,
         attachmentsResult,
         commentsResult,
+        subtasksResult,
       ] = await Promise.all([
         supabase
           .from("projects")
@@ -2244,6 +2323,7 @@ export default function Home() {
         supabase.from("tags").select("id, name, tag_color"),
         supabase.from("task_attachments").select("task_id"),
         supabase.from("task_comments").select("task_id"),
+        supabase.from("task_subtasks").select("task_id, is_done"),
       ]);
 
       if (projectsResult.error) {
@@ -2290,6 +2370,12 @@ export default function Home() {
         );
         return;
       }
+      if (subtasksResult.error) {
+        setTaskMessage(
+          `Could not load subtask counts: ${subtasksResult.error.message}`,
+        );
+        return;
+      }
 
       const projectRows = (projectsResult.data ?? []) as ProjectRow[];
       const profileRows = (profilesResult.data ?? []) as ProfileRow[];
@@ -2332,6 +2418,21 @@ export default function Home() {
           row.task_id,
           (commentCountByTask.get(row.task_id) ?? 0) + 1,
         );
+      });
+
+      const subtaskCountByTask = new Map<string, number>();
+      const completedSubtaskCountByTask = new Map<string, number>();
+      ((subtasksResult.data ?? []) as { task_id: string; is_done: boolean }[]).forEach((row) => {
+        subtaskCountByTask.set(
+          row.task_id,
+          (subtaskCountByTask.get(row.task_id) ?? 0) + 1,
+        );
+        if (row.is_done) {
+          completedSubtaskCountByTask.set(
+            row.task_id,
+            (completedSubtaskCountByTask.get(row.task_id) ?? 0) + 1,
+          );
+        }
       });
 
       const assigneesByTask = new Map<string, TaskAssigneeRow[]>();
@@ -2433,6 +2534,8 @@ export default function Home() {
           assignedTeamIds: teamIds,
           attachmentCount: attachmentCountByTask.get(task.id) ?? 0,
           commentCount: commentCountByTask.get(task.id) ?? 0,
+          subtaskCount: subtaskCountByTask.get(task.id) ?? 0,
+          completedSubtaskCount: completedSubtaskCountByTask.get(task.id) ?? 0,
           blitzitCopiedAt: task.blitzit_copied_at,
         };
       });
@@ -2775,6 +2878,7 @@ export default function Home() {
         { tableName: "task_tags", label: "task tags" },
         { tableName: "task_assignees", label: "task assignments" },
         { tableName: "task_comments", label: "comments" },
+        { tableName: "task_subtasks", label: "subtasks" },
         { tableName: "task_attachments", label: "attachment records" },
         { tableName: "activity_log", label: "activity history" },
       ];
@@ -2921,6 +3025,7 @@ export default function Home() {
         { tableName: "task_tags", label: "task tags" },
         { tableName: "task_assignees", label: "task assignments" },
         { tableName: "task_comments", label: "comments" },
+        { tableName: "task_subtasks", label: "subtasks" },
         { tableName: "task_attachments", label: "attachment records" },
         { tableName: "activity_log", label: "activity history" },
       ];
@@ -2998,6 +3103,7 @@ export default function Home() {
         "tags",
         "task_tags",
         "task_comments",
+        "task_subtasks",
         "task_attachments",
         "notification_preferences",
         "notification_dismissals",
@@ -3078,6 +3184,7 @@ export default function Home() {
     { tableName: "task_assignees", onConflict: "id" },
     { tableName: "task_tags", onConflict: "task_id,tag_id" },
     { tableName: "task_comments", onConflict: "id" },
+    { tableName: "task_subtasks", onConflict: "id" },
     { tableName: "task_attachments", onConflict: "id" },
     { tableName: "notification_preferences", onConflict: "profile_id" },
     { tableName: "notification_dismissals", onConflict: "profile_id,task_id" },
@@ -4180,11 +4287,15 @@ export default function Home() {
     setCommentMessage("");
     setComments([]);
     setNewCommentText("");
+    setSubtaskMessage("");
+    setSubtasks([]);
+    setNewSubtaskTitle("");
     setActivityMessage("");
     setActivities([]);
     await Promise.all([
       loadAttachments(task.id),
       loadComments(task.id),
+      loadSubtasks(task.id),
       loadActivity(task.id),
     ]);
   }
@@ -4198,6 +4309,9 @@ export default function Home() {
     setCommentMessage("");
     setComments([]);
     setNewCommentText("");
+    setSubtaskMessage("");
+    setSubtasks([]);
+    setNewSubtaskTitle("");
     setActivityMessage("");
     setActivities([]);
   }
@@ -4423,6 +4537,119 @@ export default function Home() {
     } finally {
       setUploadingFile(false);
     }
+  }
+
+  async function handleAddSubtask(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    if (!selectedTask || !session?.user.id) return;
+
+    const cleanTitle = newSubtaskTitle.trim();
+
+    if (!cleanTitle) {
+      setSubtaskMessage("Enter a subtask first.");
+      return;
+    }
+
+    setSavingSubtask(true);
+    setSubtaskMessage("");
+
+    try {
+      const nextSortOrder = subtasks.length * 10 + 100;
+      const { error } = await supabase.from("task_subtasks").insert({
+        task_id: selectedTask.id,
+        created_by_profile_id: session.user.id,
+        title: cleanTitle,
+        is_done: false,
+        sort_order: nextSortOrder,
+      });
+
+      if (error) {
+        setSubtaskMessage(`Could not add subtask: ${error.message}`);
+        return;
+      }
+
+      await logTaskActivity(
+        selectedTask.id,
+        "subtask_added",
+        `Added subtask: ${cleanTitle}.`,
+        { subtask_title: cleanTitle },
+      );
+
+      setNewSubtaskTitle("");
+      await Promise.all([
+        loadSubtasks(selectedTask.id),
+        loadActivity(selectedTask.id),
+        loadBoardTasks(),
+      ]);
+    } finally {
+      setSavingSubtask(false);
+    }
+  }
+
+  async function toggleSubtaskDone(subtask: TaskSubtaskRow) {
+    if (!selectedTask) return;
+
+    const nextDoneState = !subtask.is_done;
+    setSubtaskMessage("");
+
+    const { error } = await supabase
+      .from("task_subtasks")
+      .update({
+        is_done: nextDoneState,
+        completed_at: nextDoneState ? new Date().toISOString() : null,
+      })
+      .eq("id", subtask.id);
+
+    if (error) {
+      setSubtaskMessage(`Could not update subtask: ${error.message}`);
+      return;
+    }
+
+    await logTaskActivity(
+      selectedTask.id,
+      nextDoneState ? "subtask_completed" : "subtask_reopened",
+      `${nextDoneState ? "Completed" : "Reopened"} subtask: ${subtask.title}.`,
+      { subtask_id: subtask.id, subtask_title: subtask.title },
+    );
+
+    await Promise.all([
+      loadSubtasks(selectedTask.id),
+      loadActivity(selectedTask.id),
+      loadBoardTasks(),
+    ]);
+  }
+
+  async function deleteSubtask(subtask: TaskSubtaskRow) {
+    if (!selectedTask) return;
+
+    const confirmed = window.confirm(`Delete this subtask?\n\n${subtask.title}`);
+    if (!confirmed) return;
+
+    setSubtaskMessage("");
+
+    const { error } = await supabase
+      .from("task_subtasks")
+      .delete()
+      .eq("id", subtask.id);
+
+    if (error) {
+      setSubtaskMessage(`Could not delete subtask: ${error.message}`);
+      return;
+    }
+
+    await logTaskActivity(
+      selectedTask.id,
+      "subtask_deleted",
+      `Deleted subtask: ${subtask.title}.`,
+      { subtask_id: subtask.id, subtask_title: subtask.title },
+    );
+
+    await Promise.all([
+      loadSubtasks(selectedTask.id),
+      loadActivity(selectedTask.id),
+      loadBoardTasks(),
+    ]);
   }
 
   async function handleAddComment(event: React.FormEvent<HTMLFormElement>) {
@@ -7769,6 +7996,90 @@ export default function Home() {
                 </div>
               </div>
             </form>
+
+            <section className="mt-6 border-t border-slate-200 pt-5">
+              <div className="flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
+                <div>
+                  <h3 className="text-lg font-bold text-slate-950">Subtasks</h3>
+                  <p className="mt-1 text-sm text-slate-600">
+                    Break this task into smaller checklist items and check them off as they are finished.
+                  </p>
+                </div>
+                <div className="rounded-full bg-slate-100 px-3 py-1 text-sm font-semibold text-slate-700">
+                  {subtasks.filter((subtask) => subtask.is_done).length}/{subtasks.length} done
+                </div>
+              </div>
+
+              <form onSubmit={handleAddSubtask} className="mt-3 flex flex-col gap-3 md:flex-row">
+                <input
+                  className="w-full rounded-xl border border-slate-300 px-4 py-3 text-sm outline-none focus:border-slate-500"
+                  value={newSubtaskTitle}
+                  onChange={(event) => setNewSubtaskTitle(event.target.value)}
+                  placeholder="Add a subtask..."
+                />
+                <button
+                  type="submit"
+                  disabled={savingSubtask}
+                  className="rounded-xl bg-slate-950 px-4 py-3 text-sm font-semibold text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-400"
+                >
+                  {savingSubtask ? "Adding..." : "Add Subtask"}
+                </button>
+              </form>
+
+              {subtaskMessage && (
+                <div className="mt-3 rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">
+                  {subtaskMessage}
+                </div>
+              )}
+
+              <div className="mt-4 space-y-2">
+                {subtasks.length === 0 ? (
+                  <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 p-4 text-center text-sm text-slate-500">
+                    No subtasks yet.
+                  </div>
+                ) : (
+                  subtasks.map((subtask) => (
+                    <div
+                      key={subtask.id}
+                      className="flex flex-col gap-3 rounded-xl border border-slate-200 bg-white p-3 text-sm md:flex-row md:items-center md:justify-between"
+                    >
+                      <label className="flex cursor-pointer items-start gap-3">
+                        <input
+                          type="checkbox"
+                          checked={subtask.is_done}
+                          onChange={() => toggleSubtaskDone(subtask)}
+                          className="mt-1 h-4 w-4 rounded border-slate-300"
+                        />
+                        <span>
+                          <span
+                            className={`block font-medium ${
+                              subtask.is_done
+                                ? "text-slate-400 line-through"
+                                : "text-slate-900"
+                            }`}
+                          >
+                            {subtask.title}
+                          </span>
+                          <span className="mt-1 block text-xs text-slate-500">
+                            Added by {subtask.creator_name || "Unknown user"}
+                            {subtask.completed_at
+                              ? ` · Completed ${new Date(subtask.completed_at).toLocaleString()}`
+                              : ""}
+                          </span>
+                        </span>
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() => deleteSubtask(subtask)}
+                        className="self-start rounded-lg border border-red-200 px-3 py-2 text-xs font-semibold text-red-700 hover:bg-red-50 md:self-center"
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  ))
+                )}
+              </div>
+            </section>
 
             <section className="mt-6 border-t border-slate-200 pt-5">
               <h3 className="text-lg font-bold text-slate-950">Comments</h3>
