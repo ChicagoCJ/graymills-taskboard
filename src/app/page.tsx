@@ -10,7 +10,7 @@ import {
 } from "@dnd-kit/core";
 import { supabase } from "@/lib/supabaseClient";
 
-const APP_REVISION = "Version 3.7 — Split user and project color bars";
+const APP_REVISION = "Version 3.8 — Split person team and project color bars";
 
 const statusColumns = [
   {
@@ -98,6 +98,7 @@ type ProjectRow = {
   description?: string | null;
   status?: string;
   target_date?: string | null;
+  project_color?: string;
   is_active?: boolean;
 };
 
@@ -216,7 +217,8 @@ type BoardTask = {
   reminderAt: string | null;
   reminderNote: string | null;
   tags: string[];
-  colors: string[];
+  personColors: string[];
+  teamColors: string[];
   status: string;
   sortOrder: number;
   primaryProfileId: string;
@@ -471,30 +473,8 @@ function PriorityBadge({ priority }: { priority: string }) {
   );
 }
 
-function getProjectColor(projectId: string | null, projectName: string) {
-  if (!projectId) return "#CBD5E1";
-
-  const palette = [
-    "#2563EB",
-    "#7C3AED",
-    "#DB2777",
-    "#EA580C",
-    "#16A34A",
-    "#0891B2",
-    "#CA8A04",
-    "#475569",
-    "#DC2626",
-    "#4F46E5",
-  ];
-
-  const seed = `${projectId}-${projectName}`;
-  let hash = 0;
-
-  for (let index = 0; index < seed.length; index += 1) {
-    hash = (hash * 31 + seed.charCodeAt(index)) % palette.length;
-  }
-
-  return palette[Math.abs(hash) % palette.length];
+function normalizeProjectColor(project: ProjectRow | undefined, fallback = "#CBD5E1") {
+  return project?.project_color || fallback;
 }
 
 function SegmentedColorBar({
@@ -525,18 +505,25 @@ function SegmentedColorBar({
 }
 
 function TaskColorBars({
-  assigneeColors,
+  personColors,
+  teamColors,
   projectColor,
 }: {
-  assigneeColors: string[];
+  personColors: string[];
+  teamColors: string[];
   projectColor: string;
 }) {
   return (
     <div className="mb-3 space-y-1">
       <SegmentedColorBar
-        colors={assigneeColors}
+        colors={personColors}
         fallbackColor="#CBD5E1"
-        title="Assigned user/team colors"
+        title="Assigned person colors"
+      />
+      <SegmentedColorBar
+        colors={teamColors}
+        fallbackColor="#E2E8F0"
+        title="Assigned team colors"
       />
       <SegmentedColorBar
         colors={[projectColor]}
@@ -641,7 +628,7 @@ function TaskCard({
         </label>
       </div>
 
-      <TaskColorBars assigneeColors={task.colors} projectColor={task.projectColor} />
+      <TaskColorBars personColors={task.personColors} teamColors={task.teamColors} projectColor={task.projectColor} />
 
       <div className="mb-2 flex items-start justify-between gap-3">
         <h3 className="text-sm font-semibold leading-snug text-slate-950">
@@ -1162,12 +1149,14 @@ export default function Home() {
   const [newProjectDescription, setNewProjectDescription] = useState("");
   const [newProjectStatus, setNewProjectStatus] = useState("active");
   const [newProjectTargetDate, setNewProjectTargetDate] = useState("");
+  const [newProjectColor, setNewProjectColor] = useState("#2563EB");
 
   const [editingProjectId, setEditingProjectId] = useState("");
   const [editProjectName, setEditProjectName] = useState("");
   const [editProjectDescription, setEditProjectDescription] = useState("");
   const [editProjectStatus, setEditProjectStatus] = useState("active");
   const [editProjectTargetDate, setEditProjectTargetDate] = useState("");
+  const [editProjectColor, setEditProjectColor] = useState("#2563EB");
 
   const [newTeamName, setNewTeamName] = useState("");
   const [newTeamDescription, setNewTeamDescription] = useState("");
@@ -1889,7 +1878,7 @@ export default function Home() {
     const [projectResult, teamResult, profileResult, teamMembersResult] = await Promise.all([
       supabase
         .from("projects")
-        .select("id, name, description, status, target_date, is_active")
+        .select("id, name, description, status, target_date, project_color, is_active")
         .order("is_active", { ascending: false })
         .order("name"),
       supabase
@@ -2182,7 +2171,7 @@ export default function Home() {
       ] = await Promise.all([
         supabase
           .from("projects")
-          .select("id, name, is_active")
+          .select("id, name, project_color, is_active")
           .eq("is_active", true)
           .order("name"),
         supabase
@@ -2314,7 +2303,8 @@ export default function Home() {
         const taskAssignees = assigneesByTask.get(task.id) ?? [];
 
         const assigneeNames: string[] = [];
-        const colors: string[] = [];
+        const personColors: string[] = [];
+        const teamColors: string[] = [];
         const teamNames: string[] = [];
         const profileIds = Array.from(
           new Set(
@@ -2338,7 +2328,7 @@ export default function Home() {
             const assignedProfile = profileMap.get(assignee.profile_id);
             if (assignedProfile) {
               assigneeNames.push(displayProfileName(assignedProfile));
-              colors.push(assignedProfile.profile_color || "#2563EB");
+              personColors.push(assignedProfile.profile_color || "#2563EB");
             }
           }
 
@@ -2346,9 +2336,10 @@ export default function Home() {
             const assignedTeam = teamMap.get(assignee.team_id);
             if (assignedTeam) {
               teamNames.push(assignedTeam.name);
+              teamColors.push(assignedTeam.team_color || "#F97316");
+
               if (!assignee.profile_id) {
                 assigneeNames.push(assignedTeam.name);
-                colors.push(assignedTeam.team_color || "#F97316");
               }
             }
           }
@@ -2364,7 +2355,7 @@ export default function Home() {
           title: task.title,
           description: task.description,
           project: projectName,
-          projectColor: getProjectColor(task.project_id, projectName),
+          projectColor: normalizeProjectColor(task.project_id ? projectMap.get(task.project_id) : undefined),
           assignees: Array.from(new Set(assigneeNames)),
           team:
             teamNames.length > 0
@@ -2376,7 +2367,8 @@ export default function Home() {
           reminderAt: task.reminder_at,
           reminderNote: task.reminder_note,
           tags: tagsByTask.get(task.id) ?? [],
-          colors,
+          personColors: Array.from(new Set(personColors)),
+          teamColors: Array.from(new Set(teamColors)),
           status: task.status,
           sortOrder: task.sort_order,
           primaryProfileId: firstProfileId,
@@ -2419,7 +2411,7 @@ export default function Home() {
 
       const [projectsResult, assigneesResult, profilesResult, teamsResult] =
         await Promise.all([
-          supabase.from("projects").select("id, name, is_active").order("name"),
+          supabase.from("projects").select("id, name, project_color, is_active").order("name"),
           supabase
             .from("task_assignees")
             .select("task_id, assignment_type, profile_id, team_id"),
@@ -3396,6 +3388,7 @@ export default function Home() {
       description: newProjectDescription.trim() || null,
       status: newProjectStatus,
       target_date: newProjectTargetDate || null,
+      project_color: newProjectColor,
       owner_profile_id: session?.user.id ?? null,
       is_active: true,
     });
@@ -3409,6 +3402,7 @@ export default function Home() {
     setNewProjectDescription("");
     setNewProjectStatus("active");
     setNewProjectTargetDate("");
+    setNewProjectColor("#2563EB");
     setAdminMessage("Project created.");
     await refreshAllData();
   }
@@ -3419,6 +3413,7 @@ export default function Home() {
     setEditProjectDescription(project.description ?? "");
     setEditProjectStatus(project.status ?? "active");
     setEditProjectTargetDate(project.target_date ?? "");
+    setEditProjectColor(project.project_color || "#2563EB");
   }
 
   async function handleSaveProject(event: React.FormEvent<HTMLFormElement>) {
@@ -3438,6 +3433,7 @@ export default function Home() {
         description: editProjectDescription.trim() || null,
         status: editProjectStatus,
         target_date: editProjectTargetDate || null,
+        project_color: editProjectColor,
       })
       .eq("id", editingProjectId);
 
@@ -4626,10 +4622,11 @@ export default function Home() {
           ? targetColumnId.replace("project:", "")
           : null;
 
-        const newProjectName = newProjectId
-          ? projects.find((project) => project.id === newProjectId)?.name ||
-            "Project"
-          : "No project";
+        const targetProject = newProjectId
+          ? projects.find((project) => project.id === newProjectId)
+          : undefined;
+        const newProjectName = targetProject?.name || (newProjectId ? "Project" : "No project");
+        const newProjectColor = normalizeProjectColor(targetProject);
 
         setBoardTasks((currentTasks) =>
           currentTasks.map((task) => {
@@ -6794,6 +6791,17 @@ export default function Home() {
                         }
                       />
                     </div>
+                    <div className="flex items-center gap-3">
+                      <input
+                        type="color"
+                        value={newProjectColor}
+                        onChange={(event) => setNewProjectColor(event.target.value)}
+                        className="h-11 w-16 rounded-lg border border-slate-300"
+                      />
+                      <span className="text-sm text-slate-600">
+                        Project color: {newProjectColor}
+                      </span>
+                    </div>
                     <button className="rounded-xl bg-slate-950 px-4 py-3 text-sm font-semibold text-white hover:bg-slate-800">
                       Add Project
                     </button>
@@ -6844,6 +6852,17 @@ export default function Home() {
                           }
                         />
                       </div>
+                      <div className="flex items-center gap-3">
+                        <input
+                          type="color"
+                          value={editProjectColor}
+                          onChange={(event) => setEditProjectColor(event.target.value)}
+                          className="h-11 w-16 rounded-lg border border-blue-200"
+                        />
+                        <span className="text-sm text-blue-950">
+                          Project color: {editProjectColor}
+                        </span>
+                      </div>
                       <div className="flex gap-2">
                         <button className="rounded-xl bg-blue-950 px-4 py-3 text-sm font-semibold text-white hover:bg-blue-900">
                           Save Project
@@ -6871,9 +6890,15 @@ export default function Home() {
                       >
                         <div className="flex items-start justify-between gap-3">
                           <div>
-                            <p className="font-semibold text-slate-950">
-                              {project.name}
-                            </p>
+                            <div className="flex items-center gap-2">
+                              <span
+                                className="h-3 w-8 rounded-full border border-slate-200"
+                                style={{ backgroundColor: project.project_color || "#CBD5E1" }}
+                              />
+                              <p className="font-semibold text-slate-950">
+                                {project.name}
+                              </p>
+                            </div>
                             <p className="text-xs text-slate-500">
                               Status: {project.status || "active"} ·{" "}
                               {project.is_active ? "Active" : "Archived"}
