@@ -10,7 +10,7 @@ import {
 } from "@dnd-kit/core";
 import { supabase } from "@/lib/supabaseClient";
 
-const APP_REVISION = "Version 3.6 — Improved task opening and save placement";
+const APP_REVISION = "Version 3.7 — Split user and project color bars";
 
 const statusColumns = [
   {
@@ -207,6 +207,7 @@ type BoardTask = {
   title: string;
   description: string | null;
   project: string;
+  projectColor: string;
   assignees: string[];
   team: string;
   priority: string;
@@ -470,14 +471,48 @@ function PriorityBadge({ priority }: { priority: string }) {
   );
 }
 
-function AssigneeColorBar({ colors }: { colors: string[] }) {
-  const safeColors = colors.length > 0 ? colors : ["#CBD5E1"];
+function getProjectColor(projectId: string | null, projectName: string) {
+  if (!projectId) return "#CBD5E1";
+
+  const palette = [
+    "#2563EB",
+    "#7C3AED",
+    "#DB2777",
+    "#EA580C",
+    "#16A34A",
+    "#0891B2",
+    "#CA8A04",
+    "#475569",
+    "#DC2626",
+    "#4F46E5",
+  ];
+
+  const seed = `${projectId}-${projectName}`;
+  let hash = 0;
+
+  for (let index = 0; index < seed.length; index += 1) {
+    hash = (hash * 31 + seed.charCodeAt(index)) % palette.length;
+  }
+
+  return palette[Math.abs(hash) % palette.length];
+}
+
+function SegmentedColorBar({
+  colors,
+  fallbackColor,
+  title,
+}: {
+  colors: string[];
+  fallbackColor: string;
+  title: string;
+}) {
+  const safeColors = colors.length > 0 ? colors : [fallbackColor];
 
   return (
-    <div className="mb-3 flex h-2 overflow-hidden rounded-full bg-slate-200">
+    <div className="flex h-1.5 overflow-hidden rounded-full bg-slate-200" title={title}>
       {safeColors.map((color, index) => (
         <div
-          key={`${color}-${index}`}
+          key={`${title}-${color}-${index}`}
           className="h-full"
           style={{
             width: `${100 / safeColors.length}%`,
@@ -485,6 +520,29 @@ function AssigneeColorBar({ colors }: { colors: string[] }) {
           }}
         />
       ))}
+    </div>
+  );
+}
+
+function TaskColorBars({
+  assigneeColors,
+  projectColor,
+}: {
+  assigneeColors: string[];
+  projectColor: string;
+}) {
+  return (
+    <div className="mb-3 space-y-1">
+      <SegmentedColorBar
+        colors={assigneeColors}
+        fallbackColor="#CBD5E1"
+        title="Assigned user/team colors"
+      />
+      <SegmentedColorBar
+        colors={[projectColor]}
+        fallbackColor="#CBD5E1"
+        title="Project color"
+      />
     </div>
   );
 }
@@ -583,7 +641,7 @@ function TaskCard({
         </label>
       </div>
 
-      <AssigneeColorBar colors={task.colors} />
+      <TaskColorBars assigneeColors={task.colors} projectColor={task.projectColor} />
 
       <div className="mb-2 flex items-start justify-between gap-3">
         <h3 className="text-sm font-semibold leading-snug text-slate-950">
@@ -2296,15 +2354,17 @@ export default function Home() {
           }
         });
 
+        const projectName = task.project_id
+          ? (projectMap.get(task.project_id)?.name ?? "Archived or missing project")
+          : "No project";
+
         return {
           id: task.id,
           projectId: task.project_id,
           title: task.title,
           description: task.description,
-          project: task.project_id
-            ? (projectMap.get(task.project_id)?.name ??
-              "Archived or missing project")
-            : "No project",
+          project: projectName,
+          projectColor: getProjectColor(task.project_id, projectName),
           assignees: Array.from(new Set(assigneeNames)),
           team:
             teamNames.length > 0
