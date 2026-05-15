@@ -10,7 +10,7 @@ import {
 } from "@dnd-kit/core";
 import { supabase } from "@/lib/supabaseClient";
 
-const APP_REVISION = "Version 3.1 — Added bulk archive and cleanup controls";
+const APP_REVISION = "Version 3.2 — Added manager role and permissions";
 
 const statusColumns = [
   {
@@ -87,7 +87,7 @@ type Profile = {
   id: string;
   email: string | null;
   full_name: string | null;
-  role: "admin" | "member";
+  role: "admin" | "manager" | "member";
   profile_color: string;
   is_active: boolean;
 };
@@ -114,7 +114,7 @@ type ProfileRow = {
   email: string | null;
   full_name: string | null;
   profile_color: string;
-  role?: "admin" | "member";
+  role?: "admin" | "manager" | "member";
   is_active?: boolean;
 };
 
@@ -1062,7 +1062,7 @@ export default function Home() {
 
   const [editingUserId, setEditingUserId] = useState("");
   const [editUserFullName, setEditUserFullName] = useState("");
-  const [editUserRole, setEditUserRole] = useState<"admin" | "member">(
+  const [editUserRole, setEditUserRole] = useState<"admin" | "manager" | "member">(
     "member",
   );
   const [editUserColor, setEditUserColor] = useState("#2563EB");
@@ -1156,6 +1156,8 @@ export default function Home() {
 
   const accountInactive = profile?.is_active === false;
   const isAdmin = profile?.role === "admin" && !accountInactive;
+  const isManager = profile?.role === "manager" && !accountInactive;
+  const canManageWorkspace = isAdmin || isManager;
   const currentEmail = session?.user.email ?? "Unknown user";
 
   const supabaseStatusStyle =
@@ -1166,7 +1168,9 @@ export default function Home() {
   const roleLabel = useMemo(() => {
     if (!profile) return "Profile loading";
     if (profile.is_active === false) return "Inactive";
-    return profile.role === "admin" ? "Admin" : "Member";
+    if (profile.role === "admin") return "Admin";
+    if (profile.role === "manager") return "Manager";
+    return "Member";
   }, [profile]);
 
   const blitzitReady = Boolean(
@@ -1788,7 +1792,7 @@ export default function Home() {
   }
 
   async function loadAdminData() {
-    if (!isAdmin) return;
+    if (!canManageWorkspace) return;
 
     const [projectResult, teamResult, profileResult] = await Promise.all([
       supabase
@@ -2287,7 +2291,7 @@ export default function Home() {
   }
 
   async function loadArchivedTasks() {
-    if (!isAdmin) return;
+    if (!canManageWorkspace) return;
 
     setLoadingArchivedTasks(true);
 
@@ -2482,7 +2486,7 @@ export default function Home() {
   }
 
   async function restoreSelectedArchivedTasks() {
-    if (!isAdmin) return;
+    if (!canManageWorkspace) return;
 
     const taskIdsToRestore = selectedArchivedTaskIds.filter((taskId) =>
       archivedTasks.some((task) => task.id === taskId),
@@ -2638,7 +2642,7 @@ export default function Home() {
   }
 
   async function restoreArchivedTask(taskId: string) {
-    if (!isAdmin) return;
+    if (!canManageWorkspace) return;
 
     const taskToRestore = archivedTasks.find((task) => task.id === taskId);
     const confirmed = window.confirm(
@@ -3272,7 +3276,7 @@ export default function Home() {
 
   async function handleCreateProject(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!isAdmin) return;
+    if (!canManageWorkspace) return;
 
     const cleanName = newProjectName.trim();
     if (!cleanName) {
@@ -3314,7 +3318,7 @@ export default function Home() {
 
   async function handleSaveProject(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!isAdmin || !editingProjectId) return;
+    if (!canManageWorkspace || !editingProjectId) return;
 
     const cleanName = editProjectName.trim();
     if (!cleanName) {
@@ -3343,7 +3347,7 @@ export default function Home() {
   }
 
   async function archiveProject(projectId: string) {
-    if (!isAdmin) return;
+    if (!canManageWorkspace) return;
 
     const { error } = await supabase
       .from("projects")
@@ -3360,7 +3364,7 @@ export default function Home() {
   }
 
   async function restoreProject(projectId: string) {
-    if (!isAdmin) return;
+    if (!canManageWorkspace) return;
 
     const { error } = await supabase
       .from("projects")
@@ -3378,7 +3382,7 @@ export default function Home() {
 
   async function handleCreateTeam(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!isAdmin) return;
+    if (!canManageWorkspace) return;
 
     const cleanName = newTeamName.trim();
     if (!cleanName) {
@@ -3414,7 +3418,7 @@ export default function Home() {
 
   async function handleSaveTeam(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!isAdmin || !editingTeamId) return;
+    if (!canManageWorkspace || !editingTeamId) return;
 
     const cleanName = editTeamName.trim();
     if (!cleanName) {
@@ -3442,7 +3446,7 @@ export default function Home() {
   }
 
   async function archiveTeam(teamId: string) {
-    if (!isAdmin) return;
+    if (!canManageWorkspace) return;
 
     const { error } = await supabase
       .from("teams")
@@ -3459,7 +3463,7 @@ export default function Home() {
   }
 
   async function restoreTeam(teamId: string) {
-    if (!isAdmin) return;
+    if (!canManageWorkspace) return;
 
     const { error } = await supabase
       .from("teams")
@@ -4573,11 +4577,11 @@ export default function Home() {
   }, [session]);
 
   useEffect(() => {
-    if (isAdmin) {
+    if (canManageWorkspace) {
       loadAdminData();
       loadArchivedTasks();
     }
-  }, [isAdmin]);
+  }, [canManageWorkspace]);
 
   if (loadingSession) {
     return (
@@ -4664,13 +4668,13 @@ export default function Home() {
                 </div>
               )}
               <div className="mt-2 flex flex-wrap gap-1.5">
-                {isAdmin && (
+                {canManageWorkspace && (
                   <button
                     type="button"
                     onClick={() => setAdminOpen(true)}
                     className="rounded-xl bg-slate-950 px-3 py-2 text-xs font-semibold text-white hover:bg-slate-800"
                   >
-                    Admin
+                    {isAdmin ? "Admin" : "Manager"}
                   </button>
                 )}
                 <button
@@ -5900,9 +5904,13 @@ export default function Home() {
                     added
                   </li>
                   <li>
-                    • Settings, Admin, Notifications, password reset, logo,
-                    search, comments, activity, attachments, backup/restore, and
-                    board views retained
+                    • Manager role added between Admin and Member
+                  </li>
+                  <li>
+                    • Managers can see all active tasks and manage projects, teams, archives, and task workflow
+                  </li>
+                  <li>
+                    • User management, backup/restore, and permanent delete remain admin-only
                   </li>
                 </ul>
               </div>
@@ -5911,18 +5919,19 @@ export default function Home() {
         </div>
       )}
 
-      {isAdmin && adminOpen && (
+      {canManageWorkspace && adminOpen && (
         <div className="fixed inset-0 z-40 flex justify-end bg-slate-950/40">
           <div className="h-full w-full max-w-6xl overflow-y-auto border-l border-slate-200 bg-slate-50 p-5 shadow-2xl">
             <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
               <div className="mb-4 flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
                 <div>
                   <h2 className="text-xl font-bold text-slate-950">
-                    Admin: Users, Projects, Teams & Archives
+                    {isAdmin ? "Admin: Users, Projects, Teams & Archives" : "Manager: Projects, Teams & Archives"}
                   </h2>
                   <p className="text-sm text-slate-600">
-                    Manage users, profile colors, roles, projects, teams, and
-                    archived tasks. Archive/deactivate preserves task history.
+                    {isAdmin
+                      ? "Manage users, profile colors, roles, projects, teams, and archived tasks. Archive/deactivate preserves task history."
+                      : "Manage projects, teams, active task workflow, and archived task restore. User management, backup/restore, and permanent delete remain admin-only."}
                   </p>
                 </div>
                 <div className="flex flex-wrap gap-2">
@@ -5931,14 +5940,14 @@ export default function Home() {
                     onClick={refreshAllData}
                     className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50"
                   >
-                    Refresh Admin Data
+                    {isAdmin ? "Refresh Admin Data" : "Refresh Manager Data"}
                   </button>
                   <button
                     type="button"
                     onClick={() => setAdminOpen(false)}
                     className="rounded-xl bg-slate-950 px-3 py-2 text-xs font-semibold text-white hover:bg-slate-800"
                   >
-                    Close Admin
+                    {isAdmin ? "Close Admin" : "Close Manager"}
                   </button>
                 </div>
               </div>
@@ -5949,6 +5958,7 @@ export default function Home() {
                 </div>
               )}
 
+              {isAdmin && (
               <div className="mb-5 rounded-2xl border border-slate-200 bg-slate-50 p-4">
                 <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
                   <div className="max-w-2xl">
@@ -6053,6 +6063,7 @@ export default function Home() {
                   </div>
                 )}
               </div>
+              )}
 
               <div className="mb-5 rounded-2xl border border-slate-200 bg-slate-50 p-4">
                 <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
@@ -6127,14 +6138,16 @@ export default function Home() {
                       >
                         {bulkArchivedAction === "restore" ? "Restoring..." : "Restore Selected"}
                       </button>
-                      <button
-                        type="button"
-                        onClick={permanentlyDeleteSelectedArchivedTasks}
-                        disabled={selectedArchivedTaskIds.length === 0 || bulkArchivedAction !== null}
-                        className="rounded-lg border border-red-200 bg-white px-2 py-1 text-xs font-semibold text-red-700 hover:bg-red-50 disabled:cursor-not-allowed disabled:text-red-300"
-                      >
-                        {bulkArchivedAction === "delete" ? "Deleting..." : "Delete Selected Forever"}
-                      </button>
+                      {isAdmin && (
+                        <button
+                          type="button"
+                          onClick={permanentlyDeleteSelectedArchivedTasks}
+                          disabled={selectedArchivedTaskIds.length === 0 || bulkArchivedAction !== null}
+                          className="rounded-lg border border-red-200 bg-white px-2 py-1 text-xs font-semibold text-red-700 hover:bg-red-50 disabled:cursor-not-allowed disabled:text-red-300"
+                        >
+                          {bulkArchivedAction === "delete" ? "Deleting..." : "Delete Selected Forever"}
+                        </button>
+                      )}
                     </div>
                   </div>
 
@@ -6225,19 +6238,21 @@ export default function Home() {
                                   ? "Restoring..."
                                   : "Restore Task"}
                               </button>
-                              <button
-                                type="button"
-                                onClick={() => permanentlyDeleteArchivedTask(task.id)}
-                                disabled={
-                                  restoringArchivedTaskId === task.id ||
-                                  deletingArchivedTaskId === task.id
-                                }
-                                className="rounded-xl border border-red-200 bg-white px-4 py-2 text-xs font-semibold text-red-700 hover:bg-red-50 disabled:cursor-not-allowed disabled:text-red-300"
-                              >
-                                {deletingArchivedTaskId === task.id
-                                  ? "Deleting..."
-                                  : "Delete Forever"}
-                              </button>
+                              {isAdmin && (
+                                <button
+                                  type="button"
+                                  onClick={() => permanentlyDeleteArchivedTask(task.id)}
+                                  disabled={
+                                    restoringArchivedTaskId === task.id ||
+                                    deletingArchivedTaskId === task.id
+                                  }
+                                  className="rounded-xl border border-red-200 bg-white px-4 py-2 text-xs font-semibold text-red-700 hover:bg-red-50 disabled:cursor-not-allowed disabled:text-red-300"
+                                >
+                                  {deletingArchivedTaskId === task.id
+                                    ? "Deleting..."
+                                    : "Delete Forever"}
+                                </button>
+                              )}
                             </div>
                           </div>
                         </div>
@@ -6248,6 +6263,7 @@ export default function Home() {
               </div>
 
               <div className="grid gap-5 xl:grid-cols-3">
+                {isAdmin && (
                 <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
                   <h3 className="font-bold text-slate-950">Users</h3>
                   <p className="mt-1 text-sm text-slate-600">
@@ -6277,11 +6293,12 @@ export default function Home() {
                           value={editUserRole}
                           onChange={(event) =>
                             setEditUserRole(
-                              event.target.value as "admin" | "member",
+                              event.target.value as "admin" | "manager" | "member",
                             )
                           }
                         >
                           <option value="member">Member</option>
+                          <option value="manager">Manager</option>
                           <option value="admin">Admin</option>
                         </select>
                         <div className="flex items-center gap-3 rounded-xl border border-blue-200 bg-white px-3 py-2">
@@ -6382,6 +6399,7 @@ export default function Home() {
                     ))}
                   </div>
                 </div>
+                )}
 
                 <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
                   <h3 className="font-bold text-slate-950">Projects</h3>
