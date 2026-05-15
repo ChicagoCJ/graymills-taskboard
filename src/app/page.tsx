@@ -10,7 +10,7 @@ import {
 } from "@dnd-kit/core";
 import { supabase } from "@/lib/supabaseClient";
 
-const APP_REVISION = "Version 3.4 — Added team membership management";
+const APP_REVISION = "Version 3.5 — Added onboarding and help guide";
 
 const statusColumns = [
   {
@@ -5643,17 +5643,17 @@ export default function Home() {
 
       {helpOpen && (
         <div className="fixed inset-0 z-40 flex justify-end bg-slate-950/40">
-          <div className="h-full w-full max-w-3xl overflow-y-auto border-l border-slate-200 bg-slate-50 p-5 shadow-2xl">
+          <div className="h-full w-full max-w-4xl overflow-y-auto border-l border-slate-200 bg-slate-50 p-5 shadow-2xl">
             <div className="mb-4 flex items-start justify-between gap-4">
               <div>
                 <p className="text-xs font-medium text-slate-500">
                   {APP_REVISION}
                 </p>
                 <h2 className="mt-1 text-2xl font-bold text-slate-950">
-                  Help & Training Guide
+                  Help & Onboarding Guide
                 </h2>
                 <p className="mt-1 text-sm text-slate-600">
-                  A quick guide for using Graymills TaskBoard day to day.
+                  A practical guide for new users, managers, and admins using Graymills TaskBoard.
                 </p>
               </div>
               <button
@@ -5665,136 +5665,154 @@ export default function Home() {
               </button>
             </div>
 
-            <div className="space-y-4">
+            <div className="mb-5 rounded-2xl border border-blue-200 bg-blue-50 p-4 text-sm text-blue-950 shadow-sm">
+              <p className="font-bold">New user quick start</p>
+              <ol className="mt-2 list-decimal space-y-1 pl-5">
+                <li>Start in <span className="font-semibold">Status View</span> to see what work is Backlog, To Do, In Progress, Waiting, Review, or Done.</li>
+                <li>Use <span className="font-semibold">Search</span> or <span className="font-semibold">Smart Filter</span> to narrow the board.</li>
+                <li>Click <span className="font-semibold">Open</span> on a card to edit details, assignments, files, comments, reminders, and activity.</li>
+                <li>Drag cards to change the field represented by the current board view.</li>
+                <li>Use <span className="font-semibold">+ Add Task</span> at the bottom of a column to create a task already tied to that column context.</li>
+              </ol>
+            </div>
+
+            <div className="grid gap-4 lg:grid-cols-2">
               <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
                 <h3 className="text-sm font-bold text-slate-950">
-                  1. Quick Add
+                  1. What this app is for
                 </h3>
                 <p className="mt-2 text-sm text-slate-600">
-                  Use Quick Add to create a task fast. Enter the task title,
-                  choose a project, person, and team, then click Add Task. New
-                  tasks start in Backlog.
+                  Graymills TaskBoard is for shared marketing and project work. It is meant to show who owns what, what stage work is in, what is due soon, what is waiting, and what needs manager/admin attention.
                 </p>
               </div>
 
               <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
                 <h3 className="text-sm font-bold text-slate-950">
-                  2. Board Views
+                  2. Roles and permissions
                 </h3>
                 <div className="mt-2 space-y-2 text-sm text-slate-600">
-                  <p>
-                    <span className="font-semibold text-slate-800">
-                      Status:
-                    </span>{" "}
-                    workflow view by Backlog, To Do, In Progress, Waiting,
-                    Review, and Done.
-                  </p>
-                  <p>
-                    <span className="font-semibold text-slate-800">
-                      Assigned To:
-                    </span>{" "}
-                    people-only workload view.
-                  </p>
-                  <p>
-                    <span className="font-semibold text-slate-800">
-                      By Team:
-                    </span>{" "}
-                    team-only workload view.
-                  </p>
-                  <p>
-                    <span className="font-semibold text-slate-800">
-                      Project:
-                    </span>{" "}
-                    project-by-project planning view.
-                  </p>
-                  <p>
-                    <span className="font-semibold text-slate-800">
-                      Calendar:
-                    </span>{" "}
-                    due-date view for Overdue, Today, Tomorrow, Next 7 Days,
-                    Later, and No Due Date.
-                  </p>
+                  <p><span className="font-semibold text-slate-800">Admin:</span> manages users, roles, colors, projects, teams, backup/restore, archived tasks, and permanent deletes.</p>
+                  <p><span className="font-semibold text-slate-800">Manager:</span> sees all active tasks, manages projects/teams/team members, archives/restores tasks, and uses dashboard reporting.</p>
+                  <p><span className="font-semibold text-slate-800">Member:</span> works on assigned or team-visible tasks, comments, files, reminders, and personal Blitzit settings.</p>
                 </div>
               </div>
 
               <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
                 <h3 className="text-sm font-bold text-slate-950">
-                  3. Drag and Drop
+                  3. Creating tasks
+                </h3>
+                <div className="mt-2 space-y-2 text-sm text-slate-600">
+                  <p><span className="font-semibold text-slate-800">Quick Add:</span> fastest way to create a task with title, project, person, and team.</p>
+                  <p><span className="font-semibold text-slate-800">Column Add Task:</span> use the + Add Task button at the bottom of a board column to prefill that column context.</p>
+                  <p><span className="font-semibold text-slate-800">Email file task:</span> drag or choose a saved .msg/.eml file to create a task and attach the email file.</p>
+                </div>
+              </div>
+
+              <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                <h3 className="text-sm font-bold text-slate-950">
+                  4. Board views
+                </h3>
+                <div className="mt-2 space-y-2 text-sm text-slate-600">
+                  <p><span className="font-semibold text-slate-800">Status:</span> workflow stage: Backlog, To Do, In Progress, Waiting, Review, Done.</p>
+                  <p><span className="font-semibold text-slate-800">Assigned To:</span> people-only workload view.</p>
+                  <p><span className="font-semibold text-slate-800">By Team:</span> team-only workload view.</p>
+                  <p><span className="font-semibold text-slate-800">Project:</span> project-by-project planning view.</p>
+                  <p><span className="font-semibold text-slate-800">Calendar:</span> due-date buckets: Overdue, Today, Tomorrow, Next 7 Days, Later, No Due Date.</p>
+                </div>
+              </div>
+
+              <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                <h3 className="text-sm font-bold text-slate-950">
+                  5. Drag and drop rules
                 </h3>
                 <p className="mt-2 text-sm text-slate-600">
-                  Drag cards to change the field represented by the current
-                  view. In Status view it changes status. In Assigned To view it
-                  changes person assignment. In By Team view it changes team. In
-                  Project view it changes project. In Calendar view it changes
-                  due date.
+                  Dragging a card changes the field represented by the selected view. Status changes status, Assigned To changes person assignment, By Team changes team assignment, Project changes project, and Calendar changes due date. Dragging within a column changes task order.
                 </p>
               </div>
 
               <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
                 <h3 className="text-sm font-bold text-slate-950">
-                  4. Open Card
+                  6. Opening and editing cards
                 </h3>
                 <p className="mt-2 text-sm text-slate-600">
-                  Click Open to edit details, notes, due date, reminder date,
-                  priority, project, assignments, comments, attachments, Blitzit
-                  copy, and activity history.
+                  Click Open to edit task title, notes, priority, status, project, people, teams, due date, reminder date, comments, files, Blitzit copy, and activity history.
                 </p>
               </div>
 
               <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
                 <h3 className="text-sm font-bold text-slate-950">
-                  5. Search and Smart Filters
+                  7. Search and smart filters
                 </h3>
                 <p className="mt-2 text-sm text-slate-600">
-                  Use Search to find tasks by title, notes, project, assignee,
-                  team, tags, status, priority, due date, or reminder text. Use
-                  Smart Filter for common views like My Tasks, Overdue, High
-                  Priority, Has Files, or Reminder Due.
+                  Search checks task title, notes, project, assignees, teams, tags, status, priority, due-date display, and reminder notes. Smart Filters show common slices like My Tasks, Overdue, High Priority, Reminder Due, Has Files, No Due Date, and Not Copied to Blitzit.
                 </p>
               </div>
 
               <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
                 <h3 className="text-sm font-bold text-slate-950">
-                  6. Reminders and Notifications
+                  8. Reminders and notifications
                 </h3>
                 <p className="mt-2 text-sm text-slate-600">
-                  Reminders are date-only. Open a card to set Tomorrow, 1 Week,
-                  End of Week / Friday, or a custom reminder date. Due and
-                  overdue reminders appear in the Notifications panel. Email
-                  delivery remains pending SMTP setup.
+                  Reminders are date-only. Open a card to choose Tomorrow, 1 Week, End of Week / Friday, or a custom reminder date. Due and overdue reminders appear in Notifications. Email notifications remain pending SMTP/IT setup.
                 </p>
               </div>
 
               <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
                 <h3 className="text-sm font-bold text-slate-950">
-                  7. Files, Comments, and Activity
+                  9. Files, comments, and activity
                 </h3>
                 <p className="mt-2 text-sm text-slate-600">
-                  Attach Word documents, PDFs, images, and other supporting
-                  files inside a task. Use Comments for team discussion.
-                  Activity shows key changes such as edits, assignment changes,
-                  file changes, comments, and Blitzit copies.
+                  Attach Word documents, PDFs, images, email files, and other supporting files inside a task. Use Comments for team discussion. Activity shows key changes including task edits, assignments, file changes, comments, archive/restore actions, and Blitzit copies.
                 </p>
               </div>
 
               <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
                 <h3 className="text-sm font-bold text-slate-950">
-                  8. Admin Tools
+                  10. Blitzit
                 </h3>
                 <p className="mt-2 text-sm text-slate-600">
-                  Admins can manage users, roles, profile colors, projects,
-                  teams, backups, and restore previews. Archive/deactivate
-                  preserves task history.
+                  Save your personal Blitzit webhook settings in Settings. Use Copy or Re-copy on a task to send it one-way to Blitzit. TaskBoard does not sync changes back from Blitzit.
                 </p>
               </div>
 
               <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-                <h3 className="text-sm font-bold text-slate-950">9. Blitzit</h3>
+                <h3 className="text-sm font-bold text-slate-950">
+                  11. Admin and manager tools
+                </h3>
                 <p className="mt-2 text-sm text-slate-600">
-                  Save your Blitzit webhook settings in Settings. Use Copy or
-                  Re-copy on a task to send it one-way to Blitzit. This does not
-                  sync changes back from Blitzit.
+                  Admin and Manager panels include projects, teams, team membership, archived tasks, and reporting tools. Admins also control users, roles, profile colors, backups, restore, and permanent cleanup.
                 </p>
+              </div>
+
+              <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+                <h3 className="text-sm font-bold text-slate-950">
+                  12. Archive vs. delete
+                </h3>
+                <p className="mt-2 text-sm text-slate-600">
+                  Archive hides a task from active boards while preserving history. Admins can restore archived tasks. Delete Forever is only available for archived tasks and requires confirmation plus typing DELETE.
+                </p>
+              </div>
+            </div>
+
+            <div className="mt-5 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+              <h3 className="text-sm font-bold text-slate-950">
+                Recommended information to include in team rollout
+              </h3>
+              <div className="mt-2 grid gap-3 text-sm text-slate-600 md:grid-cols-2">
+                <ul className="list-disc space-y-1 pl-5">
+                  <li>Who should use TaskBoard and for what kinds of work.</li>
+                  <li>What each role can and cannot do.</li>
+                  <li>When to use Status, Assigned To, By Team, Project, and Calendar views.</li>
+                  <li>How projects and teams should be named.</li>
+                  <li>When tasks should be archived instead of deleted.</li>
+                </ul>
+                <ul className="list-disc space-y-1 pl-5">
+                  <li>How reminders should be used.</li>
+                  <li>How comments should be used versus notes.</li>
+                  <li>What file types are appropriate to attach.</li>
+                  <li>How Blitzit copying works and what it does not do.</li>
+                  <li>Who to contact for access, role changes, or team membership changes.</li>
+                </ul>
               </div>
             </div>
           </div>
