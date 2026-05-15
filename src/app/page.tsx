@@ -10,7 +10,7 @@ import {
 } from "@dnd-kit/core";
 import { supabase } from "@/lib/supabaseClient";
 
-const APP_REVISION = "Version 3.10 — Added subtasks and checklists";
+const APP_REVISION = "Version 3.11 — Moved archive controls to bottom of task";
 
 const statusColumns = [
   {
@@ -7959,41 +7959,21 @@ export default function Home() {
                 </div>
               )}
 
-              <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
-                <p className="font-semibold">Need to remove this task?</p>
-                <p className="mt-1">
-                  Use Archive Task to hide it from the active board while
-                  keeping the record, comments, attachments, and activity
-                  history for backup/audit purposes.
-                </p>
-              </div>
-
-              <div className="flex flex-col gap-3 border-t border-slate-200 pt-4 md:flex-row md:items-center md:justify-between">
+              <div className="flex flex-col gap-3 border-t border-slate-200 pt-4 md:flex-row md:justify-end">
                 <button
                   type="button"
-                  onClick={archiveSelectedTask}
-                  disabled={archivingTask || savingTask}
-                  className="rounded-xl border border-red-200 bg-white px-5 py-3 text-sm font-semibold text-red-700 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50"
+                  onClick={closeTaskEditor}
+                  className="rounded-xl border border-slate-300 bg-white px-5 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-50"
                 >
-                  {archivingTask ? "Archiving..." : "Archive Task"}
+                  Cancel
                 </button>
-
-                <div className="flex flex-col gap-3 md:flex-row md:justify-end">
-                  <button
-                    type="button"
-                    onClick={closeTaskEditor}
-                    className="rounded-xl border border-slate-300 bg-white px-5 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-50"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="submit"
-                    disabled={savingTask || archivingTask}
-                    className="rounded-xl bg-slate-950 px-5 py-3 text-sm font-semibold text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-400"
-                  >
-                    {savingTask ? "Saving..." : "Save Task"}
-                  </button>
-                </div>
+                <button
+                  type="submit"
+                  disabled={savingTask || archivingTask}
+                  className="rounded-xl bg-slate-950 px-5 py-3 text-sm font-semibold text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-400"
+                >
+                  {savingTask ? "Saving..." : "Save Task"}
+                </button>
               </div>
             </form>
 
@@ -8260,6 +8240,27 @@ export default function Home() {
                     </div>
                   ))
                 )}
+              </div>
+            </section>
+
+            <section className="mt-6 border-t border-slate-200 pt-5">
+              <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+                <p className="font-semibold">Need to remove this task?</p>
+                <p className="mt-1">
+                  Use Archive Task to hide it from the active board while
+                  keeping the record, comments, attachments, and activity
+                  history for backup/audit purposes.
+                </p>
+                <div className="mt-4 flex justify-end">
+                  <button
+                    type="button"
+                    onClick={archiveSelectedTask}
+                    disabled={archivingTask || savingTask}
+                    className="rounded-xl border border-red-200 bg-white px-5 py-3 text-sm font-semibold text-red-700 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {archivingTask ? "Archiving..." : "Archive Task"}
+                  </button>
+                </div>
               </div>
             </section>
           </div>
