@@ -10,7 +10,7 @@ import {
 } from "@dnd-kit/core";
 import { supabase } from "@/lib/supabaseClient";
 
-const APP_REVISION = "Version 3.13 — Fixed comments and author display";
+const APP_REVISION = "Version 3.14 — User management moved under Admin";
 
 const statusColumns = [
   {
@@ -6736,12 +6736,12 @@ export default function Home() {
                 <div>
                   <h2 className="text-xl font-bold text-slate-950">
                     {isAdmin
-                      ? "Admin: Users, Projects, Teams & Archives"
+                      ? "Admin: User Management, Projects, Teams & Archives"
                       : "Manager: Projects, Teams & Archives"}
                   </h2>
                   <p className="text-sm text-slate-600">
                     {isAdmin
-                      ? "Manage users, profile colors, roles, projects, teams, and archived tasks. Archive/deactivate preserves task history."
+                      ? "Manage users, profile colors, roles, active status, projects, teams, and archived tasks. User management now lives at the top of this Admin window."
                       : "Manage projects, teams, active task workflow, and archived task restore. User management, backup/restore, and permanent delete remain admin-only."}
                   </p>
                 </div>
@@ -6766,6 +6766,156 @@ export default function Home() {
               {adminMessage && (
                 <div className="mb-4 rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">
                   {adminMessage}
+                </div>
+              )}
+
+              {isAdmin && (
+                <div className="mb-5 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                  <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
+                    <div>
+                      <h3 className="font-bold text-slate-950">User Management</h3>
+                      <p className="mt-1 text-sm text-slate-600">
+                        View users, edit display names, change roles, set profile colors, and activate or deactivate access.
+                      </p>
+                    </div>
+                    <div className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs text-slate-600">
+                      Admin only
+                    </div>
+                  </div>
+                  <div className="mt-4">
+                    <h4 className="text-sm font-semibold text-slate-950">Current users</h4>
+
+                    {editingUserId && (
+                      <form
+                        onSubmit={handleSaveUser}
+                        className="mt-3 space-y-3 rounded-2xl border border-blue-200 bg-blue-50 p-4"
+                      >
+                        <p className="text-sm font-semibold text-blue-950">
+                          Edit user
+                        </p>
+                        <input
+                          className="w-full rounded-xl border border-blue-200 px-4 py-3 text-sm outline-none focus:border-blue-500"
+                          placeholder="Full name"
+                          value={editUserFullName}
+                          onChange={(event) =>
+                            setEditUserFullName(event.target.value)
+                          }
+                        />
+                        <div className="grid gap-3 md:grid-cols-2">
+                          <select
+                            className="rounded-xl border border-blue-200 px-4 py-3 text-sm outline-none focus:border-blue-500"
+                            value={editUserRole}
+                            onChange={(event) =>
+                              setEditUserRole(
+                                event.target.value as
+                                  | "admin"
+                                  | "manager"
+                                  | "member",
+                              )
+                            }
+                          >
+                            <option value="member">Member</option>
+                            <option value="manager">Manager</option>
+                            <option value="admin">Admin</option>
+                          </select>
+                          <div className="flex items-center gap-3 rounded-xl border border-blue-200 bg-white px-3 py-2">
+                            <input
+                              type="color"
+                              value={editUserColor}
+                              onChange={(event) =>
+                                setEditUserColor(event.target.value)
+                              }
+                              className="h-10 w-14 rounded-lg border border-blue-200"
+                            />
+                            <span className="text-sm text-blue-950">
+                              {editUserColor}
+                            </span>
+                          </div>
+                        </div>
+                        <div className="flex gap-2">
+                          <button className="rounded-xl bg-blue-950 px-4 py-3 text-sm font-semibold text-white hover:bg-blue-900">
+                            Save User
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setEditingUserId("")}
+                            className="rounded-xl border border-blue-200 bg-white px-4 py-3 text-sm font-semibold text-blue-950 hover:bg-blue-50"
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      </form>
+                    )}
+
+                    <div className="mt-3 space-y-2">
+                      {adminProfiles.map((userProfile) => (
+                        <div
+                          key={userProfile.id}
+                          className={`rounded-xl border p-3 text-sm ${
+                            userProfile.is_active !== false
+                              ? "border-slate-200 bg-white"
+                              : "border-slate-200 bg-slate-100 opacity-70"
+                          }`}
+                        >
+                          <div className="flex items-start justify-between gap-3">
+                            <div>
+                              <div className="flex items-center gap-2">
+                                <span
+                                  className="h-3 w-8 rounded-full"
+                                  style={{
+                                    backgroundColor:
+                                      userProfile.profile_color || "#2563EB",
+                                  }}
+                                />
+                                <p className="font-semibold text-slate-950">
+                                  {displayProfileName(userProfile)}
+                                </p>
+                              </div>
+                              <p className="mt-1 text-xs text-slate-500">
+                                {userProfile.email || "No email"}
+                              </p>
+                              <p className="mt-1 text-xs text-slate-500">
+                                Role: {userProfile.role || "member"} ·{" "}
+                                {userProfile.is_active !== false
+                                  ? "Active"
+                                  : "Inactive"}
+                              </p>
+                            </div>
+                            <div className="flex shrink-0 flex-wrap justify-end gap-2">
+                              <button
+                                type="button"
+                                onClick={() => startEditUser(userProfile)}
+                                className="rounded-lg border border-slate-200 px-2 py-1 text-xs font-semibold hover:bg-slate-50"
+                              >
+                                Edit
+                              </button>
+                              {userProfile.is_active !== false ? (
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    setUserActive(userProfile.id, false)
+                                  }
+                                  className="rounded-lg border border-red-200 px-2 py-1 text-xs font-semibold text-red-700 hover:bg-red-50"
+                                >
+                                  Deactivate
+                                </button>
+                              ) : (
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    setUserActive(userProfile.id, true)
+                                  }
+                                  className="rounded-lg border border-green-200 px-2 py-1 text-xs font-semibold text-green-700 hover:bg-green-50"
+                                >
+                                  Activate
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
                 </div>
               )}
 
@@ -7100,147 +7250,6 @@ export default function Home() {
               </div>
 
               <div className="grid gap-5 xl:grid-cols-3">
-                {isAdmin && (
-                  <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                    <h3 className="font-bold text-slate-950">Users</h3>
-                    <p className="mt-1 text-sm text-slate-600">
-                      Edit display names, roles, profile colors, and active
-                      status.
-                    </p>
-
-                    {editingUserId && (
-                      <form
-                        onSubmit={handleSaveUser}
-                        className="mt-3 space-y-3 rounded-2xl border border-blue-200 bg-blue-50 p-4"
-                      >
-                        <p className="text-sm font-semibold text-blue-950">
-                          Edit user
-                        </p>
-                        <input
-                          className="w-full rounded-xl border border-blue-200 px-4 py-3 text-sm outline-none focus:border-blue-500"
-                          placeholder="Full name"
-                          value={editUserFullName}
-                          onChange={(event) =>
-                            setEditUserFullName(event.target.value)
-                          }
-                        />
-                        <div className="grid gap-3 md:grid-cols-2">
-                          <select
-                            className="rounded-xl border border-blue-200 px-4 py-3 text-sm outline-none focus:border-blue-500"
-                            value={editUserRole}
-                            onChange={(event) =>
-                              setEditUserRole(
-                                event.target.value as
-                                  | "admin"
-                                  | "manager"
-                                  | "member",
-                              )
-                            }
-                          >
-                            <option value="member">Member</option>
-                            <option value="manager">Manager</option>
-                            <option value="admin">Admin</option>
-                          </select>
-                          <div className="flex items-center gap-3 rounded-xl border border-blue-200 bg-white px-3 py-2">
-                            <input
-                              type="color"
-                              value={editUserColor}
-                              onChange={(event) =>
-                                setEditUserColor(event.target.value)
-                              }
-                              className="h-10 w-14 rounded-lg border border-blue-200"
-                            />
-                            <span className="text-sm text-blue-950">
-                              {editUserColor}
-                            </span>
-                          </div>
-                        </div>
-                        <div className="flex gap-2">
-                          <button className="rounded-xl bg-blue-950 px-4 py-3 text-sm font-semibold text-white hover:bg-blue-900">
-                            Save User
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setEditingUserId("")}
-                            className="rounded-xl border border-blue-200 bg-white px-4 py-3 text-sm font-semibold text-blue-950 hover:bg-blue-50"
-                          >
-                            Cancel
-                          </button>
-                        </div>
-                      </form>
-                    )}
-
-                    <div className="mt-4 space-y-2">
-                      {adminProfiles.map((userProfile) => (
-                        <div
-                          key={userProfile.id}
-                          className={`rounded-xl border p-3 text-sm ${
-                            userProfile.is_active !== false
-                              ? "border-slate-200 bg-white"
-                              : "border-slate-200 bg-slate-100 opacity-70"
-                          }`}
-                        >
-                          <div className="flex items-start justify-between gap-3">
-                            <div>
-                              <div className="flex items-center gap-2">
-                                <span
-                                  className="h-3 w-8 rounded-full"
-                                  style={{
-                                    backgroundColor:
-                                      userProfile.profile_color || "#2563EB",
-                                  }}
-                                />
-                                <p className="font-semibold text-slate-950">
-                                  {displayProfileName(userProfile)}
-                                </p>
-                              </div>
-                              <p className="mt-1 text-xs text-slate-500">
-                                {userProfile.email || "No email"}
-                              </p>
-                              <p className="mt-1 text-xs text-slate-500">
-                                Role: {userProfile.role || "member"} ·{" "}
-                                {userProfile.is_active !== false
-                                  ? "Active"
-                                  : "Inactive"}
-                              </p>
-                            </div>
-                            <div className="flex shrink-0 flex-wrap justify-end gap-2">
-                              <button
-                                type="button"
-                                onClick={() => startEditUser(userProfile)}
-                                className="rounded-lg border border-slate-200 px-2 py-1 text-xs font-semibold hover:bg-slate-50"
-                              >
-                                Edit
-                              </button>
-                              {userProfile.is_active !== false ? (
-                                <button
-                                  type="button"
-                                  onClick={() =>
-                                    setUserActive(userProfile.id, false)
-                                  }
-                                  className="rounded-lg border border-red-200 px-2 py-1 text-xs font-semibold text-red-700 hover:bg-red-50"
-                                >
-                                  Deactivate
-                                </button>
-                              ) : (
-                                <button
-                                  type="button"
-                                  onClick={() =>
-                                    setUserActive(userProfile.id, true)
-                                  }
-                                  className="rounded-lg border border-green-200 px-2 py-1 text-xs font-semibold text-green-700 hover:bg-green-50"
-                                >
-                                  Activate
-                                </button>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
                 <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
                   <h3 className="font-bold text-slate-950">Projects</h3>
 
