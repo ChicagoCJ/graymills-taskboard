@@ -10,7 +10,7 @@ import {
 } from "@dnd-kit/core";
 import { supabase } from "@/lib/supabaseClient";
 
-const APP_REVISION = "Version 3.14 — User management moved under Admin";
+const APP_REVISION = "Version 3.15 — Create users from Admin";
 
 const statusColumns = [
   {
@@ -1186,6 +1186,15 @@ export default function Home() {
   >("member");
   const [editUserColor, setEditUserColor] = useState("#2563EB");
 
+  const [inviteUserEmail, setInviteUserEmail] = useState("");
+  const [inviteUserFullName, setInviteUserFullName] = useState("");
+  const [inviteUserRole, setInviteUserRole] = useState<
+    "admin" | "manager" | "member"
+  >("member");
+  const [inviteUserPassword, setInviteUserPassword] = useState("");
+  const [inviteUserColor, setInviteUserColor] = useState("#2563EB");
+  const [invitingUser, setInvitingUser] = useState(false);
+
   const [newProjectName, setNewProjectName] = useState("");
   const [newProjectDescription, setNewProjectDescription] = useState("");
   const [newProjectStatus, setNewProjectStatus] = useState("active");
@@ -2044,6 +2053,85 @@ export default function Home() {
     setEditingUserId("");
     setAdminMessage("User saved.");
     await refreshAllData();
+  }
+
+  async function handleCreateUser(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!isAdmin || invitingUser) return;
+
+    const cleanEmail = inviteUserEmail.trim().toLowerCase();
+    const cleanName = inviteUserFullName.trim();
+    const cleanPassword = inviteUserPassword.trim();
+
+    if (!cleanEmail) {
+      setAdminMessage("Enter an email address before creating the user.");
+      return;
+    }
+
+    if (!cleanPassword || cleanPassword.length < 8) {
+      setAdminMessage("Enter a temporary password with at least 8 characters.");
+      return;
+    }
+
+    setInvitingUser(true);
+    setAdminMessage("Creating user...");
+
+    const {
+      data: { session: activeSession },
+    } = await supabase.auth.getSession();
+
+    const accessToken = activeSession?.access_token;
+
+    if (!accessToken) {
+      setAdminMessage("Could not verify your signed-in admin session.");
+      setInvitingUser(false);
+      return;
+    }
+
+    try {
+      const response = await fetch("/api/admin/create-user", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${accessToken}`,
+        },
+        body: JSON.stringify({
+          email: cleanEmail,
+          fullName: cleanName,
+          password: cleanPassword,
+          role: inviteUserRole,
+          profileColor: inviteUserColor,
+        }),
+      });
+
+      const result = (await response.json().catch(() => null)) as
+        | { message?: string; error?: string }
+        | null;
+
+      if (!response.ok) {
+        setAdminMessage(result?.error || "Could not create user.");
+        return;
+      }
+
+      setInviteUserEmail("");
+      setInviteUserFullName("");
+      setInviteUserRole("member");
+      setInviteUserPassword("");
+      setInviteUserColor("#2563EB");
+      setAdminMessage(
+        result?.message ||
+          "User created. Give them the temporary password and ask them to change it after signing in.",
+      );
+      await refreshAllData();
+    } catch (error) {
+      setAdminMessage(
+        error instanceof Error
+          ? `Could not create user: ${error.message}`
+          : "Could not create user.",
+      );
+    } finally {
+      setInvitingUser(false);
+    }
   }
 
   async function setUserActive(userId: string, active: boolean) {
@@ -6741,7 +6829,7 @@ export default function Home() {
                   </h2>
                   <p className="text-sm text-slate-600">
                     {isAdmin
-                      ? "Manage users, profile colors, roles, active status, projects, teams, and archived tasks. User management now lives at the top of this Admin window."
+                      ? "Invite users, manage profile colors, roles, active status, projects, teams, and archived tasks."
                       : "Manage projects, teams, active task workflow, and archived task restore. User management, backup/restore, and permanent delete remain admin-only."}
                   </p>
                 </div>
@@ -6775,13 +6863,113 @@ export default function Home() {
                     <div>
                       <h3 className="font-bold text-slate-950">User Management</h3>
                       <p className="mt-1 text-sm text-slate-600">
-                        View users, edit display names, change roles, set profile colors, and activate or deactivate access.
+                        Create users, edit display names, change roles, set profile colors, and activate or deactivate access.
                       </p>
                     </div>
                     <div className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs text-slate-600">
                       Admin only
                     </div>
                   </div>
+                  <form
+                    onSubmit={handleCreateUser}
+                    className="mt-4 rounded-2xl border border-green-200 bg-green-50 p-4"
+                  >
+                    <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
+                      <div>
+                        <h4 className="text-sm font-semibold text-green-950">
+                          Create new user
+                        </h4>
+                        <p className="mt-1 text-xs text-green-800">
+                          Creates a Supabase Auth user immediately with a
+                          temporary password you choose.
+                        </p>
+                      </div>
+                      <span className="rounded-full border border-green-200 bg-white px-3 py-1 text-xs font-semibold text-green-800">
+                        Admin only
+                      </span>
+                    </div>
+
+                    <div className="mt-3 grid gap-3 lg:grid-cols-3">
+                      <input
+                        type="email"
+                        className="rounded-xl border border-green-200 px-4 py-3 text-sm outline-none focus:border-green-500"
+                        placeholder="Email address"
+                        value={inviteUserEmail}
+                        onChange={(event) =>
+                          setInviteUserEmail(event.target.value)
+                        }
+                        required
+                      />
+                      <input
+                        className="rounded-xl border border-green-200 px-4 py-3 text-sm outline-none focus:border-green-500"
+                        placeholder="Full name"
+                        value={inviteUserFullName}
+                        onChange={(event) =>
+                          setInviteUserFullName(event.target.value)
+                        }
+                      />
+                      <input
+                        type="password"
+                        className="rounded-xl border border-green-200 px-4 py-3 text-sm outline-none focus:border-green-500"
+                        placeholder="Temporary password"
+                        value={inviteUserPassword}
+                        onChange={(event) =>
+                          setInviteUserPassword(event.target.value)
+                        }
+                        minLength={8}
+                        required
+                      />
+                    </div>
+
+                    <div className="mt-3 grid gap-3 lg:grid-cols-[1fr_auto_auto]">
+                      <select
+                        className="rounded-xl border border-green-200 px-4 py-3 text-sm outline-none focus:border-green-500"
+                        value={inviteUserRole}
+                        onChange={(event) =>
+                          setInviteUserRole(
+                            event.target.value as
+                              | "admin"
+                              | "manager"
+                              | "member",
+                          )
+                        }
+                      >
+                        <option value="member">Member</option>
+                        <option value="manager">Manager</option>
+                        <option value="admin">Admin</option>
+                      </select>
+
+                      <div className="flex items-center gap-3 rounded-xl border border-green-200 bg-white px-3 py-2">
+                        <input
+                          type="color"
+                          value={inviteUserColor}
+                          onChange={(event) =>
+                            setInviteUserColor(event.target.value)
+                          }
+                          className="h-10 w-14 rounded-lg border border-green-200"
+                        />
+                        <span className="text-sm text-green-950">
+                          {inviteUserColor}
+                        </span>
+                      </div>
+
+                      <button
+                        type="submit"
+                        disabled={invitingUser}
+                        className="rounded-xl bg-green-700 px-4 py-3 text-sm font-semibold text-white hover:bg-green-800 disabled:cursor-not-allowed disabled:bg-green-300"
+                      >
+                        {invitingUser ? "Creating..." : "Create User"}
+                      </button>
+                    </div>
+
+                    <p className="mt-3 text-xs text-green-800">
+                      This requires SUPABASE_SERVICE_ROLE_KEY in your local and
+                      Vercel environment variables. The key is used only by the
+                      server API route, never in the browser. Give the temporary
+                      password to the user privately and have them change it after login.
+                    </p>
+                  </form>
+
                   <div className="mt-4">
                     <h4 className="text-sm font-semibold text-slate-950">Current users</h4>
 
