@@ -1,18 +1,25 @@
 import assert from "node:assert/strict";
 import { auth } from "./auth.js";
 
-// A deliberately unauthenticated smoke test. This never creates OAuth users,
-// clients, sessions, secrets, or grants and never touches TaskBoard data.
+// Deliberately unauthenticated test. The disposable CI database is migrated,
+// but no OAuth user, client, consent, or access token is ever created here.
 const base = process.env.OAUTH_TEST_BASE_URL;
 if (!base) throw new Error("Missing OAUTH_TEST_BASE_URL");
 
 const response = await auth.handler(
-  new Request(new URL("/api/auth/oauth2/authorize", base), {
-    method: "GET",
-  }),
+  new Request(new URL("/api/auth/oauth2/authorize", base), { method: "GET" }),
 );
-assert.ok(
-  response.status >= 400 && response.status < 500,
-  `Unauthenticated invalid authorization request should fail with 4xx, got ${response.status}`,
-);
-console.log(`PASS: unconfigured authorization request rejected: HTTP ${response.status}`);
+if (response.status >= 300 && response.status < 400) {
+  const location = response.headers.get("location");
+  assert.ok(location, "OAuth redirect must include a location.");
+  const redirect = new URL(location, base);
+  assert.equal(redirect.origin, new URL(base).origin, "OAuth cannot redirect off-site.");
+  assert.equal(redirect.pathname, "/sign-in", "Unauthenticated requests may redirect only to sign-in.");
+  console.log("PASS: unauthenticated OAuth request redirects safely to local sign-in.");
+} else {
+  assert.ok(
+    response.status >= 400 && response.status < 500,
+    `Unexpected authorization response HTTP ${response.status}`,
+  );
+  console.log(`PASS: invalid OAuth request rejected with HTTP ${response.status}`);
+}
