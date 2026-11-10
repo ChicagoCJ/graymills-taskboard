@@ -61,18 +61,32 @@ async function handle(request: NextRequest): Promise<Response> {
   // above; decode only the already-validated JWT to inspect its client_id claim.
   // OAuth scopes alone do not restrict Supabase database access.
   const approvedOAuthClientId = process.env.CHATGPT_OAUTH_CLIENT_ID?.trim();
-  if (approvedOAuthClientId) {
-    let tokenClientId: unknown;
+  const approvedOAuthResource = process.env.CHATGPT_OAUTH_RESOURCE?.trim();
+  // These settings must be deployed together. Never partially enable OAuth.
+  if (Boolean(approvedOAuthClientId) !== Boolean(approvedOAuthResource)) {
+    return errorResponse("OAuth integration configuration incomplete.", 503);
+  }
+  if (approvedOAuthClientId && approvedOAuthResource) {
+    let payload: Record<string, unknown>;
     try {
       const payloadSegment = token.split(".")[1];
-      if (!payloadSegment) return errorResponse("OAuth client authorization required.", 403);
-      const payload = JSON.parse(Buffer.from(payloadSegment, "base64url").toString("utf8")) as Record<string, unknown>;
-      tokenClientId = payload.client_id;
+      if (!payloadSegment) return errorResponse("OAuth token claims required.", 403);
+      payload = JSON.parse(Buffer.from(payloadSegment, "base64url").toString("utf8")) as Record<string, unknown>;
     } catch {
-      return errorResponse("OAuth client authorization required.", 403);
+      return errorResponse("OAuth token claims required.", 403);
     }
-    if (tokenClientId !== approvedOAuthClientId) {
-      return errorResponse("OAuth client not authorized for this integration.", 403);
+
+    // getUser(token) already verified the Supabase identity above; inspect the
+    // resulting claims to ensure this OAuth token is for our client and resource.
+    // aud can be a single string or an array per JWT conventions.
+    const audiences = typeof payload.aud === "string"
+      ? [payload.aud]
+      : Array.isArray(payload.aud) && payload.aud.every((value) => typeof value === "string")
+        ? payload.aud as string[]
+        : [];
+    if (payload.client_id !== approvedOAuthClientId ||
+        !audiences.includes(approvedOAuthResource)) {
+      return errorResponse("OAuth client or resource not authorized for this integration.", 403);
     }
   }
 
