@@ -4,6 +4,7 @@ import { mcp } from "@better-auth/mcp";
 import { cimd } from "@better-auth/cimd";
 import { fetchClientMetadataResource } from "@better-auth/cimd/node";
 import { Pool } from "pg";
+import { PostgresDialect } from "kysely";
 
 // Isolated proof-of-concept only. No TaskBoard or production Supabase connection.
 // The database and secret must be explicitly supplied by the disposable CI job.
@@ -34,7 +35,11 @@ export const auth = betterAuth({
   appName: "TaskBoard OAuth isolated prototype",
   baseURL,
   secret,
-  database: pool,
+  database: {
+    dialect: new PostgresDialect({ pool }),
+    type: "postgres",
+    schemaName: "chatgpt_oauth",
+  },
   disabledPaths: ["/token"],
   // Test accounts can be created only when explicitly enabled by the
   // disposable CI job. Never deploy this prototype to a public hostname.
