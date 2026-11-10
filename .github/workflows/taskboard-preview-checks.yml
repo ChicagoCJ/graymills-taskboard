@@ -32,3 +32,40 @@ jobs:
         run: npm ci
       - name: Build Next.js
         run: npm run build
+      - name: Smoke-test fail-closed MCP authorization
+        env:
+          # These are inert test UUIDs, not real user or project identifiers.
+          CHATGPT_SEO_PROJECT_ID: 11111111-1111-4111-8111-111111111111
+          CHATGPT_INTEGRATION_USER_ID: 22222222-2222-4222-8222-222222222222
+        run: |
+          npm run start -- --hostname 127.0.0.1 --port 3000 > /tmp/taskboard-start.log 2>&1 &
+          server_pid=$!
+          trap 'kill "$server_pid" 2>/dev/null || true' EXIT
+
+          for attempt in $(seq 1 30); do
+            if curl --silent --output /dev/null http://127.0.0.1:3000/api/integrations/chatgpt/mcp; then
+              break
+            fi
+            sleep 1
+          done
+
+          expect_http() {
+            expected="$1"
+            method="$2"
+            path="$3"
+            actual=$(curl --silent --output /dev/null --write-out '%{http_code}' \
+              --request "$method" "http://127.0.0.1:3000$path") || {
+              cat /tmp/taskboard-start.log
+              exit 1
+            }
+            if [ "$actual" != "$expected" ]; then
+              echo "$method $path: expected HTTP $expected but got $actual"
+              cat /tmp/taskboard-start.log
+              exit 1
+            fi
+            echo "PASS $method $path -> HTTP $actual"
+          }
+
+          expect_http 401 GET /api/integrations/chatgpt/mcp
+          expect_http 401 POST /api/integrations/chatgpt/mcp
+          expect_http 503 GET /.well-known/oauth-protected-resource/api/integrations/chatgpt/mcp
