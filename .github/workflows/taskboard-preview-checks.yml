@@ -131,6 +131,7 @@ jobs:
       OAUTH_TEST_SECRET: oauth-ci-only-nonproduction-secret-32-chars
       OAUTH_TEST_BASE_URL: http://127.0.0.1:3030
       OAUTH_TEST_RESOURCE: http://127.0.0.1:3000/api/integrations/chatgpt/mcp
+      OAUTH_TEST_ENABLE_SIGNUP: 'true'
     steps:
       - name: Check out source
         uses: actions/checkout@v4
