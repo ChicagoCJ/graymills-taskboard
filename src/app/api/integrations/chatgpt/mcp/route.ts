@@ -16,8 +16,44 @@ const JSON_HEADERS = {
   "X-Content-Type-Options": "nosniff",
 };
 
-function errorResponse(message: string, status: number): NextResponse {
-  return NextResponse.json({ error: message }, { status, headers: JSON_HEADERS });
+function errorResponse(message: string, status: number, request?: NextRequest): NextResponse {
+  const headers = new Headers(JSON_HEADERS);
+
+  // OAuth discovery is advertised only after every relevant setting is
+  // configured and the public MCP resource matches the request origin.
+  // Until then, existing 401 responses remain unchanged.
+  if (status === 401 && request) {
+    const issuer = process.env.CHATGPT_OAUTH_ISSUER?.trim();
+    const resource = process.env.CHATGPT_OAUTH_RESOURCE?.trim();
+    const clientId = process.env.CHATGPT_OAUTH_CLIENT_ID?.trim();
+    if (issuer && resource && clientId) {
+      try {
+        const issuerUrl = new URL(issuer);
+        const resourceUrl = new URL(resource);
+        if (
+          issuerUrl.protocol === "https:" &&
+          resourceUrl.protocol === "https:" &&
+          resourceUrl.origin === request.nextUrl.origin &&
+          resourceUrl.pathname === "/api/integrations/chatgpt/mcp" &&
+          !resourceUrl.search && !resourceUrl.hash &&
+          !issuerUrl.search && !issuerUrl.hash
+        ) {
+          const metadataUrl = new URL(
+            "/.well-known/oauth-protected-resource" + resourceUrl.pathname,
+            resourceUrl.origin,
+          );
+          headers.set(
+            "WWW-Authenticate",
+            `Bearer resource_metadata="${metadataUrl.toString()}"`,
+          );
+        }
+      } catch {
+        // Invalid OAuth configuration must not produce misleading discovery.
+      }
+    }
+  }
+
+  return NextResponse.json({ error: message }, { status, headers });
 }
 
 async function handle(request: NextRequest): Promise<Response> {
@@ -39,7 +75,7 @@ async function handle(request: NextRequest): Promise<Response> {
 
   const authorization = request.headers.get("authorization") ?? "";
   if (!/^Bearer \S+$/i.test(authorization)) {
-    return errorResponse("Signed-in integration bearer token required.", 401);
+    return errorResponse("Signed-in integration bearer token required.", 401, request);
   }
   const token = authorization.replace(/^Bearer\s+/i, "").trim();
 
@@ -51,7 +87,7 @@ async function handle(request: NextRequest): Promise<Response> {
   });
 
   const { data: userResult, error: authError } = await supabase.auth.getUser(token);
-  if (authError || !userResult.user) return errorResponse("Invalid session.", 401);
+  if (authError || !userResult.user) return errorResponse("Invalid session.", 401, request);
   if (userResult.user.id !== allowedUserId) {
     return errorResponse("Not authorized for this integration.", 403);
   }
