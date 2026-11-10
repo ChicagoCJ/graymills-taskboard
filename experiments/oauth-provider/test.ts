@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { auth } from "./auth.js";
+import { auth, pool } from "./auth.js";
 
 // Deliberately unauthenticated test. The disposable CI database is migrated,
 // but no OAuth user, client, consent, or access token is ever created here.
@@ -26,3 +26,6 @@ if (response.status >= 300 && response.status < 400) {
   );
   console.log(`PASS: invalid OAuth request rejected with HTTP ${response.status}`);
 }
+
+// Close the disposable database connection so the CI process terminates.
+await pool.end();
