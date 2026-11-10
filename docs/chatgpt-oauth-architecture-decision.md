@@ -26,6 +26,7 @@
 - The `tasks` SELECT policy for members is `is_active_user() AND can_see_task(id)`; all-task access is reserved for administrators via a separate policy.
 - The `can_see_task(task_uuid)` function grants visibility to administrators/managers, direct task assignees, and task assignees' team members. The dedicated ChatGPT integration identity is a `member`, so it **cannot** be assumed to see every task in the SEO project.
 - Active `projects` are readable to authenticated members, but the MCP endpoint still enforces its configured single project ID. Do not broaden OAuth data access on the assumption that project visibility implies task visibility.
+- **Actual project inventory at inspection:** one non-archived task, of which one is directly assigned to the dedicated integration member; no tasks invisible by assignment. The project is active. This confirms current task visibility, not future inventory completeness.
 - **Recommended later, only with approval:** align assignment/team membership for the integration member with the SEO project tasks, or design an individually audited project-scoped read-only database access path. Do not promote the integration user to manager/admin, relax RLS globally, or use a service-role key as a shortcut.
 
 ## Cost and provisioning decision
