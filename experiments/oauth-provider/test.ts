@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { createLocalJWKSet, jwtVerify } from "jose";
+import { verifyResourceToken } from "./verify-resource-token.js";
 import { auth, pool } from "./auth.js";
 import { oauthProviderAuthServerMetadata } from "@better-auth/oauth-provider";
 
@@ -225,6 +226,39 @@ if (process.env.OAUTH_TEST_ENABLE_SIGNUP === "true") {
     "A modified OAuth token must fail signature verification.",
   );
   console.log("PASS: tampered tokens and wrong-audience tokens are rejected.");
+  assert.equal(typeof claims.sub, "string", "Access token must identify a user.");
+  const options = {
+    token: String(tokenResult.access_token),
+    jwks: keys as Parameters<typeof verifyResourceToken>[0]["jwks"],
+    issuer: expectedIssuer,
+    resource,
+    clientId: String(client.client_id),
+    subject: String(claims.sub),
+  };
+  const validated = await verifyResourceToken(options);
+  assert.equal(validated.sub, claims.sub);
+  await assert.rejects(
+    verifyResourceToken({ ...options, clientId: "different-client" }),
+    "Resource verifier must reject the wrong OAuth client.",
+  );
+  await assert.rejects(
+    verifyResourceToken({ ...options, subject: "wrong-user" }),
+    "Resource verifier must reject the wrong integration identity.",
+  );
+  await assert.rejects(
+    verifyResourceToken({ ...options, resource: "http://127.0.0.1:3000/other-mcp" }),
+    "Resource verifier must reject the wrong resource.",
+  );
+  await assert.rejects(
+    verifyResourceToken({ ...options, issuer: "http://127.0.0.1:3030/incorrect-issuer" }),
+    "Resource verifier must reject the wrong authorization issuer.",
+  );
+  await assert.rejects(
+    verifyResourceToken({ ...options, token: [tokenParts[0], tamperedPayload, tokenParts[2]].join(".") }),
+    "Resource verifier must reject a tampered signature.",
+  );
+  console.log("PASS: strict MCP verifier rejects wrong client, identity, issuer, audience and tampering.");
+
 
 
 
