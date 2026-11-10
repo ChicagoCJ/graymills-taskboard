@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
+import { createLocalJWKSet, jwtVerify } from "jose";
 import { auth, pool } from "./auth.js";
 import { oauthProviderAuthServerMetadata } from "@better-auth/oauth-provider";
 
@@ -190,6 +191,41 @@ if (process.env.OAUTH_TEST_ENABLE_SIGNUP === "true") {
     "Access token must identify the authorized OAuth client.",
   );
   console.log("PASS: PKCE token issuance bound to local issuer, client and MCP resource.");
+  // Unlike the preceding claim inspection, this verifies the token
+  // cryptographically against the actual published authorization-server keys.
+  const keysResponse = await auth.handler(new Request(new URL("/api/auth/jwks", base)));
+  assert.equal(keysResponse.status, 200, "Issuer must publish its signing keys.");
+  const keys = await keysResponse.json() as { keys: Array<Record<string, unknown>> };
+  assert.ok(Array.isArray(keys.keys) && keys.keys.length > 0, "JWKS must contain a signing key.");
+  const keySet = createLocalJWKSet(keys as Parameters<typeof createLocalJWKSet>[0]);
+  const expectedIssuer = new URL("/api/auth", base).toString();
+  const verified = await jwtVerify(String(tokenResult.access_token), keySet, {
+    issuer: expectedIssuer,
+    audience: resource,
+  });
+  assert.equal(verified.payload.sub, claims.sub, "Verified identity must match the issued token.");
+  console.log("PASS: published JWKS signature, issuer and intended audience verified.");
+
+  await assert.rejects(
+    jwtVerify(String(tokenResult.access_token), keySet, {
+      issuer: expectedIssuer,
+      audience: "http://127.0.0.1:3000/another-private-resource",
+    }),
+    "OAuth token must be rejected for a different resource.",
+  );
+  const tokenParts = String(tokenResult.access_token).split(".");
+  const tamperedPayload = Buffer.from(
+    JSON.stringify({ ...claims, sub: "injected-user" }),
+  ).toString("base64url");
+  await assert.rejects(
+    jwtVerify([tokenParts[0], tamperedPayload, tokenParts[2]].join("."), keySet, {
+      issuer: expectedIssuer,
+      audience: resource,
+    }),
+    "A modified OAuth token must fail signature verification.",
+  );
+  console.log("PASS: tampered tokens and wrong-audience tokens are rejected.");
+
 
 
 }
