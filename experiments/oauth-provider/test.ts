@@ -56,5 +56,52 @@ assert.equal(
 );
 console.log("PASS: OAuth discovery advertises local issuer and no public client registration.");
 
+if (process.env.OAUTH_TEST_ENABLE_SIGNUP === "true") {
+  // A short-lived, fictitious identity exists only inside GitHub Actions.
+  const signupResponse = await auth.handler(
+    new Request(new URL("/api/auth/sign-up/email", base), {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        origin: new URL(base).origin,
+      },
+      body: JSON.stringify({
+        name: "OAuth CI Test User",
+        email: "oauth-ci-user@example.test",
+        password: "Only-Disposable-CI-Test-Password-4832!",
+      }),
+    }),
+  );
+  assert.equal(signupResponse.status, 200, "Disposable OAuth user sign-up must succeed.");
+  const cookie = signupResponse.headers.getSetCookie()
+    .map((value) => value.split(";")[0])
+    .join("; ");
+  assert.ok(cookie.includes("session_token"), "Disposable sign-up must create a session.");
+
+  // User-owned OAuth client registration must require this test session.
+  const createClientResponse = await auth.handler(
+    new Request(new URL("/api/auth/oauth2/create-client", base), {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        origin: new URL(base).origin,
+        cookie,
+      },
+      body: JSON.stringify({
+        client_name: "Disposable OAuth CI Client",
+        redirect_uris: ["http://127.0.0.1:8787/callback"],
+        token_endpoint_auth_method: "none",
+        application_type: "native",
+        scope: "openid profile",
+      }),
+    }),
+  );
+  assert.equal(createClientResponse.status, 200, "Session-authorized OAuth client registration must succeed.");
+  const client = await createClientResponse.json() as Record<string, unknown>;
+  assert.ok(typeof client.client_id === "string", "Client registration must return an ID.");
+  assert.ok(!client.client_secret, "Public test client must not receive a secret.");
+  console.log("PASS: isolated test user/session and public OAuth client created.");
+}
+
 // Close the disposable database connection so the CI process terminates.
 await pool.end();
