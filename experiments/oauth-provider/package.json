@@ -1,0 +1,22 @@
+{
+  "name": "taskboard-oauth-isolated-prototype",
+  "private": true,
+  "version": "0.0.1",
+  "type": "module",
+  "scripts": {
+    "check": "tsc --noEmit",
+    "test": "tsx test.ts"
+  },
+  "dependencies": {
+    "better-auth": "1.7.18",
+    "@better-auth/mcp": "1.7.18",
+    "@better-auth/cimd": "1.7.18",
+    "pg": "8.16.3"
+  },
+  "devDependencies": {
+    "@types/node": "22.18.6",
+    "@types/pg": "8.15.5",
+    "tsx": "4.20.6",
+    "typescript": "5.9.3"
+  }
+}
