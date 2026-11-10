@@ -15,8 +15,17 @@ const resource = process.env.OAUTH_TEST_RESOURCE;
 if (!databaseUrl || !secret || !baseURL || !resource) {
   throw new Error("Disposable OAuth test environment is incomplete.");
 }
-if (!["localhost", "127.0.0.1"].includes(new URL(baseURL).hostname)) {
-  throw new Error("The OAuth prototype may run only on loopback.");
+const loopbackHosts = new Set(["localhost", "127.0.0.1"]);
+const baseUrl = new URL(baseURL);
+const postgresUrl = new URL(databaseUrl);
+const resourceUrl = new URL(resource);
+
+if (!loopbackHosts.has(baseUrl.hostname) ||
+    !loopbackHosts.has(postgresUrl.hostname) ||
+    !loopbackHosts.has(resourceUrl.hostname) ||
+    !["postgres:", "postgresql:"].includes(postgresUrl.protocol) ||
+    decodeURIComponent(postgresUrl.pathname) !== "/oauth_ci") {
+  throw new Error("The OAuth prototype accepts only disposable local database and loopback resource URLs.");
 }
 
 const pool = new Pool({ connectionString: databaseUrl });
