@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 
 // TaskBoard 3.16E: OAuth protected resource discovery for the SEO MCP endpoint.
 // Fail closed until a reviewed OAuth issuer, client, and resource are configured.
@@ -11,7 +11,7 @@ const JSON_HEADERS = {
   "X-Content-Type-Options": "nosniff",
 };
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   const issuer = process.env.CHATGPT_OAUTH_ISSUER?.trim();
   const resource = process.env.CHATGPT_OAUTH_RESOURCE?.trim();
   const clientId = process.env.CHATGPT_OAUTH_CLIENT_ID?.trim();
@@ -41,6 +41,7 @@ export async function GET() {
     !issuerUrl.hostname ||
     !resourceUrl.hostname ||
     resourceUrl.pathname !== "/api/integrations/chatgpt/mcp" ||
+    resourceUrl.origin !== request.nextUrl.origin ||
     resourceUrl.search ||
     resourceUrl.hash ||
     issuerUrl.search ||
