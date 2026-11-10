@@ -1,8 +1,8 @@
 # Isolated TaskBoard OAuth prototype (CI-only, no production access)
 
 **Status:** Standalone prototype passes its isolated GitHub Actions test. It is
-**not deployed**, not imported by TaskBoard's Next.js app, and has no
-connection to the live Supabase project.
+**not deployed** and not imported by TaskBoard's Next.js app. The
+prototype's tests still use disposable PostgreSQL and no live credentials.
 
 The prototype uses Better Auth with MCP OAuth, Client ID Metadata Documents,
 and a disposable PostgreSQL container in GitHub Actions. All environment
@@ -32,27 +32,34 @@ each run.
 - The test-only `OAUTH_TEST_ENABLE_SIGNUP=true` flag permits a disposable
   fictitious user inside CI; no signup or credential handling is deployed.
 - Tests do not expose raw access tokens, client secrets, or live credentials.
-- No production Supabase database, tables, authentication hooks, or RLS policies
-  have been modified.
+- On 2026-11-10, with explicit user approval and no new subscription, a
+  private `chatgpt_oauth` schema was created in the existing Graymills TaskBoard
+  Supabase project. It contains 12 empty Better Auth tables, 18 application
+  indexes, RLS enabled on every table, and **no RLS policies**. Supabase API
+  roles have no schema or table access. Existing TaskBoard tables, policies,
+  and Supabase Auth settings were not modified.
 - A reusable verifier lives in `verify-resource-token.ts`; the live TaskBoard
   MCP route still uses Supabase bearer sessions and **has not** been switched
   to accept these Better Auth tokens.
-- Token revocation/refresh, production-grade user sign-in, account consent,
-  secure credential provisioning, and a persistent authorization database
+- The persistent private authentication schema is ready but deliberately
+  **not usable by an application yet**: no dedicated restricted database login
+  or credentials have been provisioned. Token revocation/refresh,
+  production-grade user sign-in, consent UX, and secure credential provisioning
   remain outstanding.
 - The prototype uses pinned package versions, but requires a committed lockfile
   before deployment. CI uses a clean disposable dependency installation.
 
 ## Release gates — not yet approved
 
-1. Choose and provision a private persistent authorization storage area.
-   Reusing the existing Supabase project's **private schema** would avoid
-   another project charge but still constitutes a live database schema change;
-   it requires explicit approval and reviewed SQL/migration before execution.
+1. **Completed with explicit approval:** provisioned the private schema and
+   reviewed migration in the existing project; verified table RLS, API-role
+   access denial, and migration history. No new project or subscription.
 2. Establish a stable HTTPS authorization hostname and a narrowly exposed MCP
    route without disabling TaskBoard's Preview protection.
-3. Use a secure restricted identity and private access to authentication tables;
-   no public Data API exposure or service-role bypass.
+3. Create a separate least-privilege database login and securely store its
+   credentials as server-only secrets. Review that access and ownership design
+   before making more live changes; never use Supabase's administrative
+   connection or service-role key as the OAuth application's runtime identity.
 4. Design the Supabase RLS-preserving bridge for the dedicated integration user.
 5. Implement revocation, refresh, consent UX, token rotation, negative tests
    and real connector sign-in against the test environment.
