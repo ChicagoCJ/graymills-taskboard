@@ -152,6 +152,9 @@ jobs:
           test -s ./generated-schema.sql
           echo "Generated migration SQL for review:"
           cat ./generated-schema.sql
+      - name: Verify generated migration matches reviewed SQL
+        working-directory: experiments/oauth-provider
+        run: node verify-generated-schema.mjs
       - name: Migrate disposable OAuth test database
         working-directory: experiments/oauth-provider
         run: npx --yes auth@1.7.18 migrate --yes --config ./auth.ts
