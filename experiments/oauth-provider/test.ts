@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { auth, pool } from "./auth.js";
+import { oauthProviderAuthServerMetadata } from "@better-auth/oauth-provider";
 
 // Deliberately unauthenticated test. The disposable CI database is migrated,
 // but no OAuth user, client, consent, or access token is ever created here.
@@ -26,6 +27,34 @@ if (response.status >= 300 && response.status < 400) {
   );
   console.log(`PASS: invalid OAuth request rejected with HTTP ${response.status}`);
 }
+
+// Verify discovery is truthful before any ChatGPT client can connect.
+// This request contains no secrets and does not register a client.
+const metadataHandler = oauthProviderAuthServerMetadata(auth);
+const metadataResponse = await metadataHandler(
+  new Request(new URL("/.well-known/oauth-authorization-server/api/auth", base)),
+);
+assert.equal(metadataResponse.status, 200, "OAuth authorization-server metadata must be available.");
+const metadata = await metadataResponse.json() as Record<string, unknown>;
+assert.equal(
+  metadata.issuer,
+  new URL("/api/auth", base).toString(),
+  "OAuth metadata must advertise the configured local issuer.",
+);
+assert.ok(
+  typeof metadata.authorization_endpoint === "string",
+  "OAuth metadata must advertise its authorization endpoint.",
+);
+assert.ok(
+  typeof metadata.token_endpoint === "string",
+  "OAuth metadata must advertise its token endpoint.",
+);
+assert.equal(
+  metadata.registration_endpoint,
+  undefined,
+  "Unauthenticated dynamic client registration must remain disabled.",
+);
+console.log("PASS: OAuth discovery advertises local issuer and no public client registration.");
 
 // Close the disposable database connection so the CI process terminates.
 await pool.end();
