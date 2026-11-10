@@ -28,7 +28,7 @@ if (!loopbackHosts.has(baseUrl.hostname) ||
   throw new Error("The OAuth prototype accepts only disposable local database and loopback resource URLs.");
 }
 
-const pool = new Pool({ connectionString: databaseUrl });
+export const pool = new Pool({ connectionString: databaseUrl });
 
 export const auth = betterAuth({
   appName: "TaskBoard OAuth isolated prototype",
