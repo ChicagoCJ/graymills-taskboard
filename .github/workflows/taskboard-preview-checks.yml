@@ -107,3 +107,43 @@ jobs:
             exit 1
           fi
           echo "PASS: OAuth discovery and challenge stay disabled on wrong-host configuration"
+
+  isolated-oauth-prototype:
+    name: Isolated OAuth prototype
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: oauth_ci
+          POSTGRES_PASSWORD: oauth_ci_ephemeral_only
+          POSTGRES_DB: oauth_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U oauth_ci -d oauth_ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      OAUTH_TEST_DATABASE_URL: postgres://oauth_ci:oauth_ci_ephemeral_only@127.0.0.1:5432/oauth_ci
+      OAUTH_TEST_SECRET: oauth-ci-only-nonproduction-secret-32-chars
+      OAUTH_TEST_BASE_URL: http://127.0.0.1:3030
+      OAUTH_TEST_RESOURCE: http://127.0.0.1:3000/api/integrations/chatgpt/mcp
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+      - name: Install Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install pinned prototype dependencies
+        working-directory: experiments/oauth-provider
+        run: npm install --ignore-scripts --no-audit --no-fund
+      - name: Typecheck isolated OAuth configuration
+        working-directory: experiments/oauth-provider
+        run: npm run check
+      - name: Test fail-closed OAuth authorization request
+        working-directory: experiments/oauth-provider
+        run: npm run test
