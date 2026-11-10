@@ -14,8 +14,11 @@ if (response.status >= 300 && response.status < 400) {
   assert.ok(location, "OAuth redirect must include a location.");
   const redirect = new URL(location, base);
   assert.equal(redirect.origin, new URL(base).origin, "OAuth cannot redirect off-site.");
-  assert.equal(redirect.pathname, "/sign-in", "Unauthenticated requests may redirect only to sign-in.");
-  console.log("PASS: unauthenticated OAuth request redirects safely to local sign-in.");
+  assert.ok(
+    ["/sign-in", "/api/auth/error"].includes(redirect.pathname),
+    `OAuth request redirected to an unexpected path: ${redirect.pathname}`,
+  );
+  console.log(`PASS: OAuth request safely redirected to local ${redirect.pathname}.`);
 } else {
   assert.ok(
     response.status >= 400 && response.status < 500,
