@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { auth, pool } from "./auth.js";
 import { oauthProviderAuthServerMetadata } from "@better-auth/oauth-provider";
 
@@ -96,11 +97,40 @@ if (process.env.OAUTH_TEST_ENABLE_SIGNUP === "true") {
       }),
     }),
   );
-  assert.equal(createClientResponse.status, 200, "Session-authorized OAuth client registration must succeed.");
+  assert.equal(createClientResponse.status, 201, "Session-authorized OAuth client registration must succeed.");
   const client = await createClientResponse.json() as Record<string, unknown>;
   assert.ok(typeof client.client_id === "string", "Client registration must return an ID.");
   assert.ok(!client.client_secret, "Public test client must not receive a secret.");
   console.log("PASS: isolated test user/session and public OAuth client created.");
+  // A public OAuth client must use PKCE; the next step should be consent,
+  // never an unprompted authorization-code response to an unrelated host.
+  const resource = process.env.OAUTH_TEST_RESOURCE;
+  assert.ok(resource, "Missing local OAuth resource.");
+  const verifier = "CI-only-deterministic-PKCE-verifier-4832-abcdefgh";
+  const challenge = createHash("sha256").update(verifier).digest("base64url");
+  const params = new URLSearchParams({
+    response_type: "code",
+    client_id: String(client.client_id),
+    redirect_uri: "http://127.0.0.1:8787/callback",
+    scope: "openid profile",
+    state: "ci-test-oauth-state",
+    code_challenge: challenge,
+    code_challenge_method: "S256",
+    resource,
+  });
+  const authorizeResponse = await auth.handler(
+    new Request(new URL(`/api/auth/oauth2/authorize?${params}`, base), {
+      headers: { cookie },
+    }),
+  );
+  assert.equal(authorizeResponse.status, 302, "Valid OAuth authorization must redirect to consent.");
+  const authorizationLocation = authorizeResponse.headers.get("location");
+  assert.ok(authorizationLocation, "OAuth authorization must supply its next URL.");
+  const next = new URL(authorizationLocation, base);
+  assert.equal(next.origin, new URL(base).origin, "Authorization must stay on local test issuer.");
+  assert.equal(next.pathname, "/consent", "Valid authorization should require consent.");
+  console.log("PASS: PKCE authorization request enters local consent flow.");
+
 }
 
 // Close the disposable database connection so the CI process terminates.
