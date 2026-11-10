@@ -145,6 +145,13 @@ jobs:
       - name: Typecheck isolated OAuth configuration
         working-directory: experiments/oauth-provider
         run: npm run check
+      - name: Generate schema-qualified OAuth SQL for review
+        working-directory: experiments/oauth-provider
+        run: |
+          npx --yes auth@1.7.18 generate --yes --config ./auth.ts --output ./generated-schema.sql
+          test -s ./generated-schema.sql
+          echo "Generated migration SQL for review:"
+          cat ./generated-schema.sql
       - name: Migrate disposable OAuth test database
         working-directory: experiments/oauth-provider
         run: npx --yes auth@1.7.18 migrate --yes --config ./auth.ts
