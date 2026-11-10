@@ -130,6 +130,67 @@ if (process.env.OAUTH_TEST_ENABLE_SIGNUP === "true") {
   assert.equal(next.origin, new URL(base).origin, "Authorization must stay on local test issuer.");
   assert.equal(next.pathname, "/consent", "Valid authorization should require consent.");
   console.log("PASS: PKCE authorization request enters local consent flow.");
+  // Consent must preserve the signed authorization query. Do not log codes
+  // or tokens, even though the database and identity are disposable.
+  const signedParamNames = new Set(["sig", "ba_param", ...next.searchParams.getAll("ba_param")]);
+  const signedQuery = new URLSearchParams(
+    [...next.searchParams].filter(([key]) => signedParamNames.has(key)),
+  ).toString();
+  const consentResponse = await auth.handler(
+    new Request(new URL("/api/auth/oauth2/consent", base), {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        origin: new URL(base).origin,
+        cookie,
+      },
+      body: JSON.stringify({ accept: true, oauth_query: signedQuery }),
+    }),
+  );
+  assert.equal(consentResponse.status, 200, "Signed OAuth consent should succeed.");
+  const consent = await consentResponse.json() as Record<string, unknown>;
+  assert.equal(consent.redirect, true, "Consent should continue the authorization flow.");
+  assert.equal(typeof consent.url, "string", "Consent should yield a callback URL.");
+  const callbackUrl = new URL(String(consent.url));
+  assert.equal(callbackUrl.origin, "http://127.0.0.1:8787", "Code must target registered callback.");
+  assert.equal(callbackUrl.pathname, "/callback", "Code must target exact callback path.");
+  assert.equal(callbackUrl.searchParams.get("state"), "ci-test-oauth-state");
+  const code = callbackUrl.searchParams.get("code");
+  assert.ok(code, "User consent must issue a temporary authorization code.");
+  console.log("PASS: signed consent issued code for registered callback.");
+
+  const tokenBody = new URLSearchParams({
+    grant_type: "authorization_code",
+    code,
+    client_id: String(client.client_id),
+    redirect_uri: "http://127.0.0.1:8787/callback",
+    code_verifier: verifier,
+    resource,
+  });
+  const tokenResponse = await auth.handler(
+    new Request(new URL("/api/auth/oauth2/token", base), {
+      method: "POST",
+      headers: { "content-type": "application/x-www-form-urlencoded" },
+      body: tokenBody.toString(),
+    }),
+  );
+  assert.equal(tokenResponse.status, 200, "PKCE token exchange should succeed.");
+  const tokenResult = await tokenResponse.json() as Record<string, unknown>;
+  assert.equal(typeof tokenResult.access_token, "string", "Token response must contain access token.");
+  const jwtParts = String(tokenResult.access_token).split(".");
+  assert.equal(jwtParts.length, 3, "Resource-bound OAuth access token must be a JWT.");
+  const claims = JSON.parse(Buffer.from(jwtParts[1], "base64url").toString("utf8")) as Record<string, unknown>;
+  const audiences = typeof claims.aud === "string"
+    ? [claims.aud]
+    : Array.isArray(claims.aud) ? claims.aud : [];
+  assert.ok(audiences.includes(resource), "Token must be bound to the exact MCP resource.");
+  assert.equal(claims.iss, new URL("/api/auth", base).toString(), "OAuth issuer must match local server.");
+  assert.ok(
+    claims.client_id === client.client_id || claims.azp === client.client_id,
+    "Access token must identify the authorized OAuth client.",
+  );
+  console.log("PASS: PKCE token issuance bound to local issuer, client and MCP resource.");
+
 
 }
 
