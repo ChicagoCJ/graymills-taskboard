@@ -69,3 +69,41 @@ jobs:
           expect_http 401 GET /api/integrations/chatgpt/mcp
           expect_http 401 POST /api/integrations/chatgpt/mcp
           expect_http 503 GET /.well-known/oauth-protected-resource/api/integrations/chatgpt/mcp
+      - name: Smoke-test misconfigured OAuth discovery stays disabled
+        env:
+          CHATGPT_SEO_PROJECT_ID: 11111111-1111-4111-8111-111111111111
+          CHATGPT_INTEGRATION_USER_ID: 22222222-2222-4222-8222-222222222222
+          CHATGPT_OAUTH_CLIENT_ID: test-only-client
+          CHATGPT_OAUTH_ISSUER: https://issuer.example.test
+          CHATGPT_OAUTH_RESOURCE: https://wrong-host.example.test/api/integrations/chatgpt/mcp
+        run: |
+          npm run start -- --hostname 127.0.0.1 --port 3001 > /tmp/taskboard-oauth-test.log 2>&1 &
+          server_pid=$!
+          trap 'kill "$server_pid" 2>/dev/null || true' EXIT
+
+          for attempt in $(seq 1 30); do
+            if curl --silent --output /dev/null http://127.0.0.1:3001/api/integrations/chatgpt/mcp; then
+              break
+            fi
+            sleep 1
+          done
+
+          metadata_status=$(curl --silent --output /dev/null --write-out '%{http_code}' \
+            http://127.0.0.1:3001/.well-known/oauth-protected-resource/api/integrations/chatgpt/mcp)
+          if [ "$metadata_status" != "503" ]; then
+            echo "Expected OAuth discovery to reject a mismatched resource host (503); got $metadata_status"
+            cat /tmp/taskboard-oauth-test.log
+            exit 1
+          fi
+
+          response_headers=$(curl --silent --dump-header - --output /dev/null \
+            http://127.0.0.1:3001/api/integrations/chatgpt/mcp)
+          echo "$response_headers" | grep -qi '^HTTP/.* 401' || {
+            echo "Expected unauthorized request (401)"
+            exit 1
+          }
+          if echo "$response_headers" | grep -qi '^www-authenticate:'; then
+            echo "A mismatched resource host must not be advertised via WWW-Authenticate"
+            exit 1
+          fi
+          echo "PASS: OAuth discovery and challenge stay disabled on wrong-host configuration"
