@@ -36,7 +36,9 @@ export const auth = betterAuth({
   secret,
   database: pool,
   disabledPaths: ["/token"],
-  emailAndPassword: { enabled: false },
+  // Test accounts can be created only when explicitly enabled by the
+  // disposable CI job. Never deploy this prototype to a public hostname.
+  emailAndPassword: { enabled: process.env.OAUTH_TEST_ENABLE_SIGNUP === "true" },
   plugins: [
     jwt({ disableSettingJwtHeader: true }),
     mcp({
