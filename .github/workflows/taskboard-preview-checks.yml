@@ -1,0 +1,34 @@
+name: TaskBoard development checks
+
+on:
+  push:
+    branches:
+      - feature/taskboard-3.16a-readonly
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: TypeScript and Next.js build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      # Build-only placeholders. No live Supabase or Vercel credentials are used.
+      NEXT_PUBLIC_SUPABASE_URL: https://example.supabase.co
+      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: build-only-placeholder
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+      - name: Install Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install locked dependencies
+        run: npm ci
+      - name: Build Next.js
+        run: npm run build
