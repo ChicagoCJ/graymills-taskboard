@@ -42,8 +42,8 @@ each run.
   MCP route still uses Supabase bearer sessions and **has not** been switched
   to accept these Better Auth tokens.
 - The persistent private authentication schema is ready but deliberately
-  **not usable by an application yet**: no dedicated restricted database login
-  or credentials have been provisioned. Token revocation/refresh,
+  **not usable by an application yet**: the restricted login was created but
+  deliberately has no password and no deployed auth server credentials. Token revocation/refresh,
   production-grade user sign-in, consent UX, and secure credential provisioning
   remain outstanding.
 - The prototype uses pinned package versions, but requires a committed lockfile
@@ -56,12 +56,32 @@ each run.
    access denial, and migration history. No new project or subscription.
 2. Establish a stable HTTPS authorization hostname and a narrowly exposed MCP
    route without disabling TaskBoard's Preview protection.
-3. Create a separate least-privilege database login and securely store its
-   credentials as server-only secrets. Review that access and ownership design
-   before making more live changes; never use Supabase's administrative
-   connection or service-role key as the OAuth application's runtime identity.
+3. **Partially completed:** the `chatgpt_oauth_runtime` PostgreSQL LOGIN role
+   exists with `NOINHERIT`, `NOBYPASSRLS`, `NOSUPERUSER`, no password, and
+   maximum three connections. It has DML privileges and narrowly named RLS
+   policies on the twelve private OAuth tables. Direct PostgreSQL checks
+   confirmed it cannot read or write `public.tasks`, cannot read
+   `public.profiles`, and cannot use Supabase's `auth` schema. A password
+   must later be generated and stored as a server-only secret; no password
+   may be committed, printed or passed to browser code. The new login does
+   not own TaskBoard tables or gain any role-admin privileges.
 4. Design the Supabase RLS-preserving bridge for the dedicated integration user.
 5. Implement revocation, refresh, consent UX, token rotation, negative tests
    and real connector sign-in against the test environment.
 6. Obtain explicit approval before any production rollout or altering the
    working TaskBoard or its Supabase security settings.
+
+## Live database verification (2026-11-10)
+
+- Migration `taskboard_317_restricted_chatgpt_oauth_runtime_login` succeeded.
+- Twelve RLS policies restricted to `chatgpt_oauth_runtime` were verified.
+- Twelve of twelve private tables grant only the required DML to this role.
+- Role's password is `NULL` in `pg_authid`, verified without reading any hash.
+- No existing TaskBoard tables, profiles, Supabase Auth settings, or employee
+  sessions were changed.
+- PostgreSQL still has global `PUBLIC` privileges on the `public`
+  schema. A role-specific `search_path` is **not** a true isolation boundary.
+  Its lack of TaskBoard table grants was explicitly tested. Pre-existing
+  `SECURITY DEFINER` functions still require a separate security audit before
+  exposing the OAuth service to untrusted network requests.
+
