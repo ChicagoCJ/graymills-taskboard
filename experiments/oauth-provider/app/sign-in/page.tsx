@@ -1,10 +1,8 @@
 "use client";
 
 import { FormEvent, useState } from "react";
-import { useSearchParams } from "next/navigation";
 
 export default function SignInPage() {
-  const query = useSearchParams();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
@@ -26,7 +24,7 @@ export default function SignInPage() {
         return;
       }
       // Only same-origin, relative paths can be used for post-login navigation.
-      const destination = query.get("returnTo") || "/";
+      const destination = new URLSearchParams(window.location.search).get("returnTo") || "/";
       const parsed = new URL(destination, window.location.origin);
       window.location.assign(
         parsed.origin === window.location.origin ? parsed.pathname + parsed.search : "/",
