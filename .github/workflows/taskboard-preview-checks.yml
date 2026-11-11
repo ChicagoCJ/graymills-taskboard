@@ -148,6 +148,44 @@ jobs:
       - name: Build isolated OAuth Next.js test service
         working-directory: experiments/oauth-provider
         run: npm run build
+      - name: Smoke-test unconfigured OAuth deployment fails closed
+        working-directory: experiments/oauth-provider
+        run: |
+          env -u OAUTH_TEST_DATABASE_URL -u OAUTH_TEST_SECRET -u OAUTH_TEST_BASE_URL \
+            -u OAUTH_TEST_RESOURCE -u OAUTH_TEST_ENABLE_SIGNUP \
+            npm run start -- --hostname 127.0.0.1 --port 3031 > /tmp/oauth-test-server.log 2>&1 &
+          server_pid=$!
+          trap 'kill "$server_pid" 2>/dev/null || true' EXIT
+
+          for attempt in $(seq 1 30); do
+            if curl --silent --output /dev/null http://127.0.0.1:3031/; then
+              break
+            fi
+            sleep 1
+          done
+
+          check_status() {
+            expected="$1"
+            path="$2"
+            actual=$(curl --silent --output /dev/null --write-out '%{http_code}' \
+              "http://127.0.0.1:3031$path") || {
+              cat /tmp/oauth-test-server.log
+              exit 1
+            }
+            if [ "$actual" != "$expected" ]; then
+              echo "Expected $expected from $path, received $actual"
+              cat /tmp/oauth-test-server.log
+              exit 1
+            fi
+          }
+
+          check_status 200 /
+          check_status 200 /sign-in
+          check_status 200 /consent
+          check_status 503 /api/auth/get-session
+          check_status 503 /.well-known/oauth-authorization-server/api/auth
+          echo "PASS: unconfigured OAuth service shows safe pages but rejects auth and discovery"
+
       - name: Generate schema-qualified OAuth SQL for review
         working-directory: experiments/oauth-provider
         run: |
