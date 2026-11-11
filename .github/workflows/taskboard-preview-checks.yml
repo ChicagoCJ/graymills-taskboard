@@ -145,6 +145,9 @@ jobs:
       - name: Typecheck isolated OAuth configuration
         working-directory: experiments/oauth-provider
         run: npm run check
+      - name: Build isolated OAuth Next.js test service
+        working-directory: experiments/oauth-provider
+        run: npm run build
       - name: Generate schema-qualified OAuth SQL for review
         working-directory: experiments/oauth-provider
         run: |
