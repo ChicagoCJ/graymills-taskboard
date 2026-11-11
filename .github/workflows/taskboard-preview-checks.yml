@@ -11,6 +11,12 @@ on:
 permissions:
   contents: read
 
+# Keep the newest push and PR checks; avoid repeatedly installing the same
+# experimental auth dependencies on superseded commits.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build:
     name: TypeScript and Next.js build
