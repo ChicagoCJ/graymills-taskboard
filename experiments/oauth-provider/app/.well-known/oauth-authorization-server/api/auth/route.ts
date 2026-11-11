@@ -4,7 +4,7 @@ export const dynamic = "force-dynamic";
 
 export async function GET(request: NextRequest) {
   try {
-    const { auth } = await import("../../../../auth");
+    const { auth } = await import("../../../../../auth");
     const { oauthProviderAuthServerMetadata } = await import("@better-auth/oauth-provider");
     return oauthProviderAuthServerMetadata(auth)(request);
   } catch {
