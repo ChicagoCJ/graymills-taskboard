@@ -36,7 +36,7 @@ if (inCi) {
       resourceUrl.protocol !== "https:" ||
       !["postgres:", "postgresql:"].includes(postgresUrl.protocol) ||
       postgresUrl.hostname !== process.env.OAUTH_ALLOWED_DB_HOST ||
-      !/^chatgpt_oauth_runtime(?:\\.[a-z0-9]+)?$/.test(decodeURIComponent(postgresUrl.username)) ||
+      !/^chatgpt_oauth_runtime(?:\.[a-z0-9]+)?$/.test(decodeURIComponent(postgresUrl.username)) ||
       baseUrl.hostname !== process.env.OAUTH_ALLOWED_HOST ||
       baseUrl.pathname !== "/" ||
       secret.length < 32) {
