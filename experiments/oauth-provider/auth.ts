@@ -6,27 +6,42 @@ import { fetchClientMetadataResource } from "@better-auth/cimd/node";
 import { Pool } from "pg";
 import { PostgresDialect } from "kysely";
 
-// Isolated proof-of-concept only. No TaskBoard or production Supabase connection.
-// The database and secret must be explicitly supplied by the disposable CI job.
-const databaseUrl = process.env.OAUTH_TEST_DATABASE_URL;
-const secret = process.env.OAUTH_TEST_SECRET;
-const baseURL = process.env.OAUTH_TEST_BASE_URL;
-const resource = process.env.OAUTH_TEST_RESOURCE;
+// The existing CI tests use only a disposable loopback database. The
+// deployment branch is separately gated and requires explicit server-only
+// credentials. Never load TaskBoard's production Supabase service-role key.
+const inCi = Boolean(process.env.OAUTH_TEST_DATABASE_URL);
+const databaseUrl = inCi ? process.env.OAUTH_TEST_DATABASE_URL : process.env.OAUTH_DATABASE_URL;
+const secret = inCi ? process.env.OAUTH_TEST_SECRET : process.env.OAUTH_SERVER_SECRET;
+const baseURL = inCi ? process.env.OAUTH_TEST_BASE_URL : process.env.OAUTH_BASE_URL;
+const resource = inCi ? process.env.OAUTH_TEST_RESOURCE : process.env.OAUTH_RESOURCE;
 
 if (!databaseUrl || !secret || !baseURL || !resource) {
-  throw new Error("Disposable OAuth test environment is incomplete.");
+  throw new Error("OAuth authentication is disabled until its server-only configuration is complete.");
 }
-const loopbackHosts = new Set(["localhost", "127.0.0.1"]);
 const baseUrl = new URL(baseURL);
 const postgresUrl = new URL(databaseUrl);
 const resourceUrl = new URL(resource);
+const loopbackHosts = new Set(["localhost", "127.0.0.1"]);
 
-if (!loopbackHosts.has(baseUrl.hostname) ||
-    !loopbackHosts.has(postgresUrl.hostname) ||
-    !loopbackHosts.has(resourceUrl.hostname) ||
-    !["postgres:", "postgresql:"].includes(postgresUrl.protocol) ||
-    decodeURIComponent(postgresUrl.pathname) !== "/oauth_ci") {
-  throw new Error("The OAuth prototype accepts only disposable local database and loopback resource URLs.");
+if (inCi) {
+  if (!loopbackHosts.has(baseUrl.hostname) ||
+      !loopbackHosts.has(postgresUrl.hostname) ||
+      !loopbackHosts.has(resourceUrl.hostname) ||
+      decodeURIComponent(postgresUrl.pathname) !== "/oauth_ci") {
+    throw new Error("OAuth CI tests accept only disposable local database and resource URLs.");
+  }
+} else {
+  if (process.env.OAUTH_DEPLOY_ENABLED !== "true" ||
+      baseUrl.protocol !== "https:" ||
+      resourceUrl.protocol !== "https:" ||
+      !["postgres:", "postgresql:"].includes(postgresUrl.protocol) ||
+      postgresUrl.hostname !== process.env.OAUTH_ALLOWED_DB_HOST ||
+      !/^chatgpt_oauth_runtime(?:\\.[a-z0-9]+)?$/.test(decodeURIComponent(postgresUrl.username)) ||
+      baseUrl.hostname !== process.env.OAUTH_ALLOWED_HOST ||
+      baseUrl.pathname !== "/" ||
+      secret.length < 32) {
+    throw new Error("The isolated OAuth server is not authorized for this deployment.");
+  }
 }
 
 export const pool = new Pool({ connectionString: databaseUrl });
@@ -43,7 +58,10 @@ export const auth = betterAuth({
   disabledPaths: ["/token"],
   // Test accounts can be created only when explicitly enabled by the
   // disposable CI job. Never deploy this prototype to a public hostname.
-  emailAndPassword: { enabled: process.env.OAUTH_TEST_ENABLE_SIGNUP === "true" },
+  emailAndPassword: {
+    enabled: true,
+    disableSignUp: !inCi || process.env.OAUTH_TEST_ENABLE_SIGNUP !== "true",
+  },
   plugins: [
     jwt({ disableSettingJwtHeader: true }),
     mcp({
