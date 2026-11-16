@@ -16,23 +16,29 @@ Executed `live-rollout-preflight.readonly.sql` against the existing project. All
 
 The existing Auth trigger `public.handle_new_user()` creates an **active Member** profile immediately on user creation. Therefore **creating a login before isolation is active would create a period of overbroad access** under current RLS policies. Do not do that.
 
-## Important design gap: do not apply the current review SQL directly
+## Updated identity design (review-only)
 
-`integration-rls-isolation.review.sql` and
-`integration-storage-isolation.review.sql` intentionally use a **synthetic test identity**
-`f0000000-0000-4000-8000-000000000001`. They are not safe to install unchanged:
-they would NOT limit the real Supabase Auth integration identity unless its exact UUID
-matched the placeholder.
+The candidate SQL now uses an **administrator-controlled Supabase Auth `app_metadata` marker**:
+`taskboard_integration: "graymills_seo_readonly_v1"`.
 
-**Before any live migration, redesign the identity selector and rerun tests.**
-Preferred candidate: provision the account with a fixed, admin-only
-`app_metadata.taskboard_integration` marker (not editable `user_metadata`) and
-install tested restrictive policies for this marker **before** user creation.
-The marker must have a unique, reviewed value and the resulting account UUID must be
-pinned in the MCP bridge; ordinary employees must not carry the marker.
-Alternatively, design a controlled admin provisioning sequence that installs
-UUID-specific RLS before enabling sign-in. Do not create an active Auth login
-without restrictions.
+This avoids relying on a placeholder UUID before user creation. The policies apply
+to any Supabase JWT with that trusted admin metadata, whether or not its
+Auth user UUID was known when the policies were installed. For the marked
+identity, they allow SELECT only on its own active `member` profile,
+the one approved SEO project, and nonarchived SEO tasks; they block writes
+on all 18 public tables and SELECT/write on `storage.objects`.
+
+Normal employees without that marker retain their preexisting permissions.
+**Never** place the marker in user-editable `user_metadata`, use an employee
+account, or let the account sign in before policies are installed and verified.
+
+The isolated GitHub fixture now simulates `auth.jwt().app_metadata`.
+Passing simulated tests is **not** a live Supabase/Auth/Storage API validation.
+The bridge must still pin the eventual approved Supabase Auth UUID and validate
+the external OAuth token independently.
+
+**This is not yet a production-ready migration.** The mark-and-provision
+workflow and real API negative tests require explicit authorization.
 
 ## Deployment stages and explicit gates
 
