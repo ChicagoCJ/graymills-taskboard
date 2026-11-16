@@ -72,8 +72,27 @@ try {
   await pool.query(`INSERT INTO public.task_comments(id) VALUES ($1)`,
     ["b0000000-0000-4000-8000-000000000007"]);
 
+  // Synthetic private Supabase Storage fixture: existing authenticated
+  // users can see and mutate their own objects before the new restrictions.
+  await pool.query("CREATE SCHEMA storage");
+  await pool.query("CREATE TABLE storage.objects (id uuid PRIMARY KEY, bucket_id text NOT NULL, name text NOT NULL)");
+  await pool.query("ALTER TABLE storage.objects ENABLE ROW LEVEL SECURITY");
+  await pool.query("GRANT USAGE ON SCHEMA storage TO authenticated");
+  await pool.query("GRANT SELECT, INSERT, UPDATE, DELETE ON storage.objects TO authenticated");
+  await pool.query(`CREATE POLICY existing_attachment_policy ON storage.objects
+    AS PERMISSIVE FOR ALL TO authenticated USING (true) WITH CHECK (true)`);
+  const storageObjectId = "90000000-0000-4000-8000-000000000009";
+  await pool.query("INSERT INTO storage.objects (id,bucket_id,name) VALUES ($1,$2,$3)",
+    [storageObjectId,"task-attachments",`${integrationId}/example.txt`]);
+
   const sql = await readFile(new URL("./integration-rls-isolation.review.sql", import.meta.url),"utf8");
   await pool.query(sql);
+  const storageSql = await readFile(new URL("./integration-storage-isolation.review.sql", import.meta.url),"utf8");
+  await pool.query(storageSql);
+  const storagePolicies = await pool.query(`SELECT policyname, permissive, cmd FROM pg_policies
+    WHERE schemaname='storage' AND tablename='objects' AND policyname LIKE 'chatgpt_iso_%'`);
+  assert.equal(storagePolicies.rowCount,4,"Storage objects must have four restrictive policies.");
+  assert.ok(storagePolicies.rows.every((p) => p.permissive === "RESTRICTIVE"));
   const policies = await pool.query(`SELECT tablename, cmd, permissive, policyname FROM pg_policies
     WHERE schemaname='public' AND policyname LIKE 'chatgpt_iso_%'`);
   assert.equal(policies.rowCount, tables.length*4, "Four restrictive policies per public table required.");
@@ -106,12 +125,26 @@ try {
       const rows = await client.query(`SELECT id FROM public.${table}`);
       assert.equal(rows.rowCount,0,`Integration must have no SELECT visibility on ${table}`);
     }
+    const storageRows = await client.query("SELECT id FROM storage.objects");
+    assert.equal(storageRows.rowCount,0,"Integration must not read its own storage objects.");
+    const storageUpdate = await client.query("UPDATE storage.objects SET name='changed' WHERE id=$1",
+      [storageObjectId]);
+    assert.equal(storageUpdate.rowCount,0,"Integration must not update attachments.");
+    const storageDelete = await client.query("DELETE FROM storage.objects WHERE id=$1",[storageObjectId]);
+    assert.equal(storageDelete.rowCount,0,"Integration must not delete attachments.");
     const update = await client.query("UPDATE public.tasks SET title='must-not-change' WHERE id=$1",[visibleTaskId]);
     assert.equal(update.rowCount,0,"Integration must be unable to UPDATE an otherwise-visible task.");
     const remove = await client.query("DELETE FROM public.tasks WHERE id=$1",[visibleTaskId]);
     assert.equal(remove.rowCount,0,"Integration must be unable to DELETE an otherwise-visible task.");
     const profileChange = await client.query("UPDATE public.profiles SET role='admin' WHERE id=$1",[integrationId]);
     assert.equal(profileChange.rowCount,0,"Integration cannot elevate its profile role.");
+    await client.query("SAVEPOINT blocked_storage_insert");
+    const storageInsert = await client.query(
+      "INSERT INTO storage.objects(id,bucket_id,name) VALUES ($1,$2,$3)",
+      ["80000000-0000-4000-8000-000000000008","task-attachments",`${integrationId}/new.txt`]
+    ).then(() => false, (error) => error.code === "42501");
+    assert.equal(storageInsert,true,"Integration must not upload attachments.");
+    await client.query("ROLLBACK TO SAVEPOINT blocked_storage_insert");
     const insert = await client.query("INSERT INTO public.tasks(id,project_id) VALUES ($1,$2)",
       ["a0000000-0000-4000-8000-000000000008",seoId]).then(() => false,
       (error) => error.code === "42501");
@@ -124,11 +157,16 @@ try {
       "Employee's existing project visibility must be retained.");
     assert.equal((await client.query("SELECT id FROM public.tasks")).rowCount,3,
       "Employee's existing tasks visibility must be retained.");
+    assert.equal((await client.query("SELECT id FROM storage.objects")).rowCount,1,
+      "Employee's existing Storage SELECT access must be retained.");
+    const employeeStorageEdit = await client.query("UPDATE storage.objects SET name='employee-edit' WHERE id=$1",
+      [storageObjectId]);
+    assert.equal(employeeStorageEdit.rowCount,1,"Employee's existing Storage UPDATE access must be retained.");
     const update = await client.query("UPDATE public.tasks SET title='employee-can-edit' WHERE id=$1",
       [visibleTaskId]);
     assert.equal(update.rowCount,1,"Employee's existing UPDATE permission must be retained.");
   });
-  console.log("PASS: 18 tables have 72 restrictive policies; dedicated integration read-only SEO access and employee permissions verified.");
+  console.log("PASS: 18 tables have 72 restrictive policies plus four Storage policies; integration cannot mutate or read attachments and employee permissions retained.");
 
   // A new public table must trigger a design review, not silently get access.
   await pool.query("CREATE TABLE public.new_unreviewed_table (id uuid)");
