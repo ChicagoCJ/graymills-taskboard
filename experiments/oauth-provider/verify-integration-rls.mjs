@@ -38,9 +38,9 @@ try {
       SELECT NULLIF(current_setting('request.jwt.claim.sub', true), '')::uuid
       $$;
     CREATE OR REPLACE FUNCTION auth.jwt() RETURNS jsonb
-      LANGUAGE sql STABLE AS $
+      LANGUAGE sql STABLE AS $jwt$
       SELECT COALESCE(NULLIF(current_setting('request.jwt.claims', true), ''), '{}')::jsonb
-      $;
+      $jwt$;
     GRANT USAGE ON SCHEMA auth TO authenticated;
     GRANT EXECUTE ON FUNCTION auth.uid() TO authenticated;
     GRANT EXECUTE ON FUNCTION auth.jwt() TO authenticated;
