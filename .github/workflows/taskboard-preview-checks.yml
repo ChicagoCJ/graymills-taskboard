@@ -214,6 +214,9 @@ jobs:
       - name: Replay actual live core RLS policies in isolated disposable PostgreSQL
         working-directory: experiments/oauth-provider
         run: node verify-live-core-policy-replay.mjs
+      - name: Read-only unauthenticated live Supabase Auth REST Storage API check
+        working-directory: experiments/oauth-provider
+        run: node verify-live-unauthenticated-api.mjs
       - name: Test fail-closed OAuth authorization request
         working-directory: experiments/oauth-provider
         run: npm run test
