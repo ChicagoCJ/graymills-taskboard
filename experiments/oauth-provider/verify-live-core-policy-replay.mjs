@@ -52,8 +52,14 @@ try {
   await pool.query(`
     CREATE SCHEMA auth;
     CREATE SCHEMA storage;
+    CREATE ROLE anon NOLOGIN;
+    CREATE ROLE authenticator LOGIN PASSWORD 'disposable-postgrest-authenticator';
+    GRANT authenticated TO authenticator;
+    GRANT USAGE ON SCHEMA public, auth, storage TO authenticated, anon;
     CREATE OR REPLACE FUNCTION auth.uid() RETURNS uuid LANGUAGE sql STABLE AS $body$
-      SELECT NULLIF(current_setting('request.jwt.claim.sub',true),'')::uuid
+      SELECT COALESCE(
+        NULLIF(current_setting('request.jwt.claim.sub',true),'')::uuid,
+        (COALESCE(NULLIF(current_setting('request.jwt.claims',true),''),'{}')::jsonb ->> 'sub')::uuid)
     $body$;
     CREATE OR REPLACE FUNCTION auth.jwt() RETURNS jsonb LANGUAGE sql STABLE AS $body$
       SELECT COALESCE(NULLIF(current_setting('request.jwt.claims',true),''),'{}')::jsonb
