@@ -6,6 +6,9 @@ const connectionString = process.env.OAUTH_TEST_DATABASE_URL;
 if (!connectionString || !new URL(connectionString).hostname.match(/^(127\.0\.0\.1|localhost)$/)) {
   throw new Error("RLS proof tests require only disposable loopback PostgreSQL.");
 }
+if (new URL(connectionString).pathname !== "/oauth_ci") {
+  throw new Error("Refusing RLS fixture outside the disposable oauth_ci database.");
+}
 const pool = new Pool({ connectionString });
 const integrationId = "f0000000-0000-4000-8000-000000000001";
 const employeeId = "e0000000-0000-4000-8000-000000000002";
@@ -37,6 +40,10 @@ try {
     GRANT USAGE ON SCHEMA auth TO authenticated;
     GRANT EXECUTE ON FUNCTION auth.uid() TO authenticated;
   `);
+
+  // Earlier disposable login tests intentionally leave a public canary.
+  // Remove it only within this ephemeral test database.
+  await pool.query("DROP TABLE IF EXISTS public.taskboard_canary");
 
   // This is a disposable synthetic *policy fixture*, not the user's real data.
   // Each table intentionally starts with a permissive policy so the new
