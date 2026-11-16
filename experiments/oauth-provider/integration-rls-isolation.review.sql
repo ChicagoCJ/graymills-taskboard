@@ -1,12 +1,12 @@
 -- REVIEW-ONLY: DO NOT RUN ON LIVE SUPABASE.
 -- TaskBoard 3.18J restricted integration isolation proof-of-concept.
--- This exact test UUID is NOT a real Supabase Auth user. Replace only after
--- authorized identity provisioning and a separate production change review.
+-- The integration identity is selected using *admin-controlled* app_metadata.
+-- Do not use user_metadata: users can edit it. Do not grant integration flag to employees.
+-- REVIEW ONLY: this has not been deployed or verified against live Auth JWTs.
 -- The SEO project UUID is the verified existing Parts Washers SEO project.
 -- The explicit public-table inventory fails if the schema drifts.
 DO $policy$
 DECLARE
-  integration_id uuid := 'f0000000-0000-4000-8000-000000000001';
   seo_project_id uuid := '22eacfd8-22f8-4c01-a51d-44987facad42';
   tables text[] := ARRAY[
     'activity_log','custom_fields','notification_dismissals',
@@ -17,7 +17,7 @@ DECLARE
   ];
   inventory text[];
   t text;
-  guard text := format('(auth.uid() IS DISTINCT FROM %L::uuid)',integration_id);
+  guard text := '(COALESCE((auth.jwt() -> ''app_metadata'' ->> ''taskboard_integration''), '''') <> ''graymills_seo_readonly_v1'')';
   read_guard text;
 BEGIN
   SELECT array_agg(c.relname ORDER BY c.relname) INTO inventory
@@ -44,8 +44,8 @@ BEGIN
     END IF;
     read_guard := CASE t
       WHEN 'profiles' THEN format(
-        '(%s OR (id = %L::uuid AND is_active = true AND role = ''member''))',
-        guard,integration_id)
+        '(%s OR (id = auth.uid() AND is_active = true AND role = ''member''))',
+        guard)
       WHEN 'projects' THEN format(
         '(%s OR (id = %L::uuid AND is_active = true))',
         guard,seo_project_id)
