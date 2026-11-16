@@ -1,11 +1,11 @@
 -- REVIEW ONLY. DO NOT RUN ON THE LIVE SUPABASE PROJECT.
 -- Tested with a synthetic, disposable PostgreSQL storage.objects fixture.
 -- Storage is Supabase-managed; applying this requires explicit DBA review.
--- This matches the integration UUID used by integration-rls-isolation.review.sql.
+-- Uses the same admin-controlled app_metadata marker as the public RLS review SQL.
+-- A user can change user_metadata but cannot self-assign app_metadata.
 DO $storage_policy$
 DECLARE
-  integration_id uuid := 'f0000000-0000-4000-8000-000000000001';
-  guard text := format('(auth.uid() IS DISTINCT FROM %L::uuid)', integration_id);
+  guard text := '(COALESCE((auth.jwt() -> ''app_metadata'' ->> ''taskboard_integration''), '''') <> ''graymills_seo_readonly_v1'')';
 BEGIN
   IF to_regclass('storage.objects') IS NULL THEN
     RAISE EXCEPTION 'No storage.objects table: cannot verify storage isolation';
