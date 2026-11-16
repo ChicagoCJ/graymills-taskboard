@@ -2,8 +2,33 @@ import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { createLocalJWKSet, jwtVerify } from "jose";
 import { verifyResourceToken } from "./verify-resource-token.js";
+import { isApprovedTaskBoardResource } from "./resource-contract.js";
 import { auth, pool } from "./auth.js";
 import { oauthProviderAuthServerMetadata } from "@better-auth/oauth-provider";
+
+
+// The deployed issuer must target the exact protected TaskBoard resource.
+// These tests do not need access to any live secrets or database records.
+const testIssuer = "https://oauth.example.test";
+const testResource = "https://taskboard.example.test/api/integrations/chatgpt/mcp";
+assert.equal(isApprovedTaskBoardResource(testResource, testIssuer, "taskboard.example.test"), true);
+for (const candidate of [
+  "https://taskboard.example.test/api/integrations/chatgpt/seo",
+  "https://taskboard.example.test/api/integrations/chatgpt/mcp?extra=1",
+  "https://taskboard.example.test/api/integrations/chatgpt/mcp#fragment",
+  "http://taskboard.example.test/api/integrations/chatgpt/mcp",
+  "https://oauth.example.test/api/integrations/chatgpt/mcp",
+  "https://other.example.test/api/integrations/chatgpt/mcp",
+  "https://user:pass@taskboard.example.test/api/integrations/chatgpt/mcp",
+]) {
+  assert.equal(
+    isApprovedTaskBoardResource(candidate, testIssuer, "taskboard.example.test"),
+    false,
+    "Unapproved OAuth resource URL must be rejected.",
+  );
+}
+assert.equal(isApprovedTaskBoardResource(testResource, testIssuer, undefined), false);
+console.log("PASS: deployed OAuth resource must use the approved TaskBoard MCP origin and path.");
 
 // Deliberately unauthenticated test. The disposable CI database is migrated,
 // but no OAuth user, client, consent, or access token is ever created here.
