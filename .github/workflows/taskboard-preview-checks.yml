@@ -232,3 +232,37 @@ jobs:
       - name: Test fail-closed OAuth authorization request
         working-directory: experiments/oauth-provider
         run: npm run test
+
+
+  isolated-supabase-auth-storage:
+    name: Local Supabase Auth + Storage API security
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+      - name: Install Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install pinned OAuth prototype test dependencies
+        working-directory: experiments/oauth-provider
+        run: npm install --ignore-scripts --no-audit --no-fund
+      - name: Launch disposable local Supabase services
+        working-directory: experiments/oauth-provider
+        run: |
+          npx --yes supabase@2.79.0 init
+          npx --yes supabase@2.79.0 start
+      - name: Prepare isolated TaskBoard policies and test identities
+        working-directory: experiments/oauth-provider
+        run: |
+          set -a
+          npx --yes supabase@2.79.0 status -o env > /tmp/taskboard-disposable-supabase.env
+          . /tmp/taskboard-disposable-supabase.env
+          set +a
+          node prepare-local-supabase-api.mjs
+          node verify-local-supabase-auth-storage.mjs
+      - name: Shut down disposable Supabase service
+        if: always()
+        working-directory: experiments/oauth-provider
+        run: npx --yes supabase@2.79.0 stop --no-backup || true
