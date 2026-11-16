@@ -37,8 +37,13 @@ try {
       LANGUAGE sql STABLE AS $$
       SELECT NULLIF(current_setting('request.jwt.claim.sub', true), '')::uuid
       $$;
+    CREATE OR REPLACE FUNCTION auth.jwt() RETURNS jsonb
+      LANGUAGE sql STABLE AS $
+      SELECT COALESCE(NULLIF(current_setting('request.jwt.claims', true), ''), '{}')::jsonb
+      $;
     GRANT USAGE ON SCHEMA auth TO authenticated;
     GRANT EXECUTE ON FUNCTION auth.uid() TO authenticated;
+    GRANT EXECUTE ON FUNCTION auth.jwt() TO authenticated;
   `);
 
   // Earlier disposable login tests intentionally leave a public canary.
@@ -98,12 +103,15 @@ try {
   assert.equal(policies.rowCount, tables.length*4, "Four restrictive policies per public table required.");
   assert.ok(policies.rows.every((p) => p.permissive === "RESTRICTIVE"));
 
-  async function asUser(userId, work) {
+  async function asUser(userId, work, isIntegration = false) {
     const client = await pool.connect();
     try {
       await client.query("BEGIN");
       await client.query("SET LOCAL ROLE authenticated");
       await client.query("SELECT set_config('request.jwt.claim.sub',$1,true)",[userId]);
+      const claims = { sub: userId, app_metadata: isIntegration
+        ? { taskboard_integration: 'graymills_seo_readonly_v1' } : {} };
+      await client.query("SELECT set_config('request.jwt.claims',$1,true)", [JSON.stringify(claims)]);
       await work(client);
     } finally {
       await client.query("ROLLBACK");
@@ -150,7 +158,7 @@ try {
       (error) => error.code === "42501");
     assert.equal(insert,true,"Integration must be unable to INSERT tasks.");
     // An error leaves a PostgreSQL transaction aborted; test employee next.
-  });
+  }, true);
 
   await asUser(employeeId, async (client) => {
     assert.equal((await client.query("SELECT id FROM public.projects")).rowCount,2,
