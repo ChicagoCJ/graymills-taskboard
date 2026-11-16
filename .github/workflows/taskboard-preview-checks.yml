@@ -208,6 +208,9 @@ jobs:
       - name: Verify private OAuth login permissions against disposable PostgreSQL
         working-directory: experiments/oauth-provider
         run: node verify-restricted-login.mjs
+      - name: Verify proposed integration RLS isolation in disposable PostgreSQL
+        working-directory: experiments/oauth-provider
+        run: node verify-integration-rls.mjs
       - name: Test fail-closed OAuth authorization request
         working-directory: experiments/oauth-provider
         run: npm run test
