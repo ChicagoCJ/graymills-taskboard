@@ -40,6 +40,31 @@ the external OAuth token independently.
 **This is not yet a production-ready migration.** The mark-and-provision
 workflow and real API negative tests require explicit authorization.
 
+## Production-like policy replay result (2026-11-16)
+
+**PASS — GitHub Actions run 43974935891.** New test
+`verify-live-core-policy-replay.mjs` uses a separate, disposable PostgreSQL
+database and replays a read-only snapshot of **21 actual live RLS policies**
+covering `profiles`, `projects`, `tasks`, `task_assignees`, and
+`storage.objects`, plus **six actual public authorization helper functions**.
+It does **not** copy customer records or secrets.
+
+The test reproduces a known pre-change exposure: a normal Member assigned to
+both projects can read both active projects and update an assigned task in an
+unrelated project. After applying the proposed 72 restrictive public policies
+and four storage policies, the marked integration identity is limited to SEO
+project/task reads and rejected for tasks mutation, profile role edits,
+storage reads, and uploads. Ordinary employee and administrator regression
+checks pass. The untrusted `user_metadata` marker does not activate
+the trusted integration restrictions.
+
+**Scope limitation:** the replay uses simplified synthetic table definitions
+and simulated Supabase Auth JWT claims, not a full Supabase stack. It
+does NOT validate actual PostgREST endpoints, Auth user provisioning,
+storage API behavior, bucket lifecycle, signed URLs, all 18 original
+table policies, or real employee workflows. Those remain required before
+live activation. The SQL remains **review-only; do not apply**.
+
 ## Deployment stages and explicit gates
 
 1. **Review / design** (not done): finalize identity-selector approach and verify
