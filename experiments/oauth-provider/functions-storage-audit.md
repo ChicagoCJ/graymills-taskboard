@@ -47,6 +47,17 @@ Twelve `chatgpt_oauth` tables have RLS enabled and are not granted to `authentic
 
 These fixtures simulate existing policies. **They do not replicate every live Supabase RLS, trigger, API or Storage behavior.** Do not assume passing mock tests alone establishes live security.
 
+## Supabase Advisor cross-check
+
+The live **Security Advisor** independently reports:
+- Seven `public` SECURITY DEFINER functions callable by `anon`, and seven callable by `authenticated`: see [anonymous execution warning](https://supabase.com/docs/guides/database/database-linter?lint=0028_anon_security_definer_function_executable) and [authenticated execution warning](https://supabase.com/docs/guides/database/database-linter?lint=0029_authenticated_security_definer_function_executable). These are the same seven functions listed above, **not fourteen distinct functions**.
+- One mutable search-path warning on `public.set_updated_at`: [guidance](https://supabase.com/docs/guides/database/database-linter?lint=0011_function_search_path_mutable).
+- Leaked-password protection disabled in Supabase Auth: [guidance](https://supabase.com/docs/guides/auth/password-security#password-strength-and-leaked-password-protection). This is a separate existing security setting, not evidence of a leaked credential.
+
+The Performance Advisor also reports existing missing FK indexes and per-row auth function evaluation in RLS policies. Those are not part of this read-only OAuth security change, and modifying them now would expand scope.
+
+**No advisor notices were remediated automatically.** Review and prioritize separately to avoid breaking the existing application.
+
 ## Remaining mandatory checks before live provisioning
 
 - Confirm an approved, fixed integration identity / Auth user UUID, its profile role, whether the `handle_new_user` trigger creates an active Member, and the exact need for assignment to the SEO project's tasks.
