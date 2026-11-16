@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import { createLocalJWKSet, jwtVerify } from "jose";
+import { createLocalJWKSet, jwtVerify, generateKeyPair, exportJWK, SignJWT } from "jose";
+import { readApprovedProjectViaOAuth } from "./rls-identity-bridge.js";
 import { verifyResourceToken } from "./verify-resource-token.js";
 import { isApprovedTaskBoardResource } from "./resource-contract.js";
 import { auth, pool } from "./auth.js";
@@ -288,6 +289,100 @@ if (process.env.OAUTH_TEST_ENABLE_SIGNUP === "true") {
 
 
 }
+
+
+// Standalone RLS identity-bridge tests: every Supabase response is mocked.
+// No live database, credentials, or privilege-bypassing key is used.
+const bridgeUserId = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+const bridgeProjectId = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
+const { privateKey: bridgePrivateKey, publicKey: bridgePublicKey } = await generateKeyPair("RS256");
+const bridgeJwk = await exportJWK(bridgePublicKey);
+const bridgeToken = await new SignJWT({ client_id: "approved-oauth-client" })
+  .setProtectedHeader({ alg: "RS256" })
+  .setIssuer("https://oauth.example.test/api/auth")
+  .setAudience("https://taskboard.example.test/api/integrations/chatgpt/mcp")
+  .setSubject("approved-oauth-subject")
+  .setIssuedAt()
+  .setExpirationTime("5m")
+  .sign(bridgePrivateKey);
+const bridgeConfig = {
+  oauthToken: bridgeToken,
+  jwks: { keys: [bridgeJwk] },
+  issuer: "https://oauth.example.test/api/auth",
+  resource: "https://taskboard.example.test/api/integrations/chatgpt/mcp",
+  clientId: "approved-oauth-client",
+  oauthSubject: "approved-oauth-subject",
+  supabaseUrl: "https://project.supabase.co/",
+  supabasePublishableKey: "test-publishable-key",
+  integrationEmail: "dedicated-integration@example.test",
+  integrationPassword: "disposable-test-only-password",
+  integrationUserId: bridgeUserId,
+  projectId: bridgeProjectId,
+};
+let bridgeRequests: { url: URL; method: string; bearer: string | null }[] = [];
+let mockUserId = bridgeUserId;
+let mockTaskProjectId = bridgeProjectId;
+const mockBridgeFetch = (async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
+  const url = new URL(String(input));
+  const headers = new Headers(init?.headers);
+  const method = init?.method || "GET";
+  bridgeRequests.push({ url, method, bearer: headers.get("authorization") });
+  const reply = (value: unknown, status = 200) =>
+    new Response(JSON.stringify(value), { status, headers: { "content-type": "application/json" } });
+  if (url.pathname === "/auth/v1/token") {
+    assert.equal(method, "POST");
+    assert.equal(headers.get("authorization"), null);
+    const body = JSON.parse(String(init?.body)) as Record<string, string>;
+    assert.equal(body.email, bridgeConfig.integrationEmail);
+    assert.equal(body.password, bridgeConfig.integrationPassword);
+    return reply({ access_token: "mock-rls-session" });
+  }
+  assert.equal(method, "GET", "RLS data requests must be read-only");
+  assert.equal(headers.get("authorization"), "Bearer mock-rls-session");
+  if (url.pathname === "/auth/v1/user") return reply({ id: mockUserId });
+  if (url.pathname === "/rest/v1/profiles") return reply([
+    { id: bridgeUserId, role: "member", is_active: true },
+  ]);
+  if (url.pathname === "/rest/v1/projects") {
+    assert.equal(url.searchParams.get("id"), `eq.${bridgeProjectId}`);
+    return reply([{ id: bridgeProjectId, name: "Parts Washers SEO", is_active: true }]);
+  }
+  if (url.pathname === "/rest/v1/tasks") {
+    assert.equal(url.searchParams.get("project_id"), `eq.${bridgeProjectId}`);
+    assert.equal(url.searchParams.get("is_archived"), "eq.false");
+    assert.equal(url.searchParams.get("limit"), "100");
+    return reply([{ id: "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+      project_id: mockTaskProjectId, title: "SEO test", is_archived: false }]);
+  }
+  throw new Error("Unexpected network request in bridge test");
+}) as typeof fetch;
+const bridgeResult = await readApprovedProjectViaOAuth(bridgeConfig, mockBridgeFetch);
+assert.equal(bridgeResult.project.id, bridgeProjectId);
+assert.equal(bridgeResult.tasks.length, 1);
+assert.equal(bridgeRequests.length, 5);
+assert.ok(bridgeRequests.every((r) => r.url.origin === "https://project.supabase.co"));
+assert.ok(!JSON.stringify(bridgeResult).includes("mock-rls-session"),
+  "Supabase session must never be included in result.");
+console.log("PASS: OAuth identity bridge uses only a dedicated Supabase Member's RLS session.");
+
+bridgeRequests = [];
+await assert.rejects(readApprovedProjectViaOAuth(
+  { ...bridgeConfig, oauthSubject: "unapproved-subject" }, mockBridgeFetch));
+assert.equal(bridgeRequests.length, 0, "Unauthorized OAuth must never trigger a credential request.");
+await assert.rejects(readApprovedProjectViaOAuth(
+  { ...bridgeConfig, resource: "https://other.example.test/mcp" }, mockBridgeFetch));
+assert.equal(bridgeRequests.length, 0, "Wrong-audience token must fail before credential use.");
+await assert.rejects(readApprovedProjectViaOAuth(
+  { ...bridgeConfig, supabaseUrl: "https://evil.example.test/" }, mockBridgeFetch));
+assert.equal(bridgeRequests.length, 0, "Unapproved Supabase host must fail without credential use.");
+
+mockUserId = "dddddddd-dddd-4ddd-8ddd-dddddddddddd";
+await assert.rejects(readApprovedProjectViaOAuth(bridgeConfig, mockBridgeFetch));
+mockUserId = bridgeUserId;
+mockTaskProjectId = "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee";
+await assert.rejects(readApprovedProjectViaOAuth(bridgeConfig, mockBridgeFetch));
+mockTaskProjectId = bridgeProjectId;
+console.log("PASS: bridge rejects unauthorized identity, audience, Supabase origin and out-of-scope task.");
 
 // Close the disposable database connection so the CI process terminates.
 await pool.end();
