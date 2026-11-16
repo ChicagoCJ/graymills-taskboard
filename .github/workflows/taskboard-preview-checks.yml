@@ -214,6 +214,18 @@ jobs:
       - name: Replay actual live core RLS policies in isolated disposable PostgreSQL
         working-directory: experiments/oauth-provider
         run: node verify-live-core-policy-replay.mjs
+      - name: Validate authenticated HTTP access with disposable PostgREST
+        working-directory: experiments/oauth-provider
+        run: |
+          docker run --detach --rm --name taskboard-ci-postgrest --network host \
+            -e PGRST_DB_URI=postgres://authenticator:disposable-postgrest-authenticator@127.0.0.1:5432/oauth_policy_replay \
+            -e PGRST_DB_SCHEMAS=public \
+            -e PGRST_DB_ANON_ROLE=anon \
+            -e PGRST_JWT_SECRET=disposable-postgrest-jwt-secret-ci-2026-only \
+            -e PGRST_SERVER_PORT=3002 \
+            postgrest/postgrest:v12.2.8
+          trap 'docker logs taskboard-ci-postgrest 2>&1 | tail -n 50; docker rm -f taskboard-ci-postgrest >/dev/null 2>&1 || true' EXIT
+          node verify-postgrest-http.mjs
       - name: Read-only unauthenticated live Supabase Auth REST Storage API check
         working-directory: experiments/oauth-provider
         run: node verify-live-unauthenticated-api.mjs
