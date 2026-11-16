@@ -5,6 +5,7 @@ import { cimd } from "@better-auth/cimd";
 import { fetchClientMetadataResource } from "@better-auth/cimd/node";
 import { Pool } from "pg";
 import { PostgresDialect } from "kysely";
+import { isApprovedTaskBoardResource } from "./resource-contract";
 
 // The existing CI tests use only a disposable loopback database. The
 // deployment branch is separately gated and requires explicit server-only
@@ -39,6 +40,7 @@ if (inCi) {
       !/^chatgpt_oauth_runtime(?:\.[a-z0-9]+)?$/.test(decodeURIComponent(postgresUrl.username)) ||
       baseUrl.hostname !== process.env.OAUTH_ALLOWED_HOST ||
       baseUrl.pathname !== "/" ||
+      !isApprovedTaskBoardResource(resource, baseURL, process.env.OAUTH_ALLOWED_RESOURCE_HOST) ||
       secret.length < 32) {
     throw new Error("The isolated OAuth server is not authorized for this deployment.");
   }
