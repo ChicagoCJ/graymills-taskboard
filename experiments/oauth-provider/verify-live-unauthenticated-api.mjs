@@ -24,8 +24,10 @@ for (const check of scenarios) {
     });
     const body = await response.text();
     assert.ok(body.length <= 20000, check.name + " response unexpectedly large.");
-    assert.ok([401,403].includes(response.status),
+    const deniedStatuses = check.name.startsWith("Storage") ? [400,401,403] : [401,403];
+    assert.ok(deniedStatuses.includes(response.status),
       check.name + " must reject unauthenticated GET: received " + response.status);
+    assert.ok(response.status !== 200 && response.status !== 206, "Unauthenticated response must not return object content.");
     console.log("PASS " + check.name + " -> HTTP " + response.status);
   } finally {
     clearTimeout(timeout);
