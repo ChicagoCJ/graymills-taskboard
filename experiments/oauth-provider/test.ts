@@ -298,12 +298,15 @@ if (process.env.OAUTH_TEST_ENABLE_SIGNUP === "true") {
       body: JSON.stringify({
         client_name: "Disposable MCP introspection client",
         redirect_uris: ["http://127.0.0.1:8790/callback"],
+        application_type: "native",
         token_endpoint_auth_method: "client_secret_post",
         scope: "openid profile",
       }),
     },
   ));
-  assert.equal(resourceClientResponse.status, 201);
+  if (resourceClientResponse.status !== 201) {
+    throw new Error(`Disposable introspection client registration failed (${resourceClientResponse.status}): ${await resourceClientResponse.text()}`);
+  }
   const resourceClient = await resourceClientResponse.json() as Record<string, unknown>;
   assert.equal(typeof resourceClient.client_secret, "string");
   const introspect = () => auth.handler(new Request(new URL("/api/auth/oauth2/introspect", base), {
