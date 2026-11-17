@@ -208,6 +208,10 @@ if (process.env.OAUTH_TEST_ENABLE_SIGNUP === "true") {
   const jwtParts = String(tokenResult.access_token).split(".");
   assert.equal(jwtParts.length, 3, "Resource-bound OAuth access token must be a JWT.");
   const claims = JSON.parse(Buffer.from(jwtParts[1], "base64url").toString("utf8")) as Record<string, unknown>;
+  const accessHeader = JSON.parse(Buffer.from(jwtParts[0], "base64url").toString("utf8"));
+  assert.equal(accessHeader.typ, "at+jwt", "Resource requires an OAuth access token, not a session JWT.");
+  assert.equal(typeof claims.sid, "string", "Resource requires a revocable user session.");
+  assert.ok(Number(claims.exp) - Number(claims.iat) <= 300, "Access tokens must expire within five minutes.");
   const audiences = typeof claims.aud === "string"
     ? [claims.aud]
     : Array.isArray(claims.aud) ? claims.aud : [];
@@ -284,10 +288,50 @@ if (process.env.OAUTH_TEST_ENABLE_SIGNUP === "true") {
     "Resource verifier must reject a tampered signature.",
   );
   console.log("PASS: strict MCP verifier rejects wrong client, identity, issuer, audience and tampering.");
-
-
-
-
+  // The separate MCP resource must check live session/client state before
+  // using its Supabase credentials. Exercise the actual provider endpoint,
+  // including a separately authenticated confidential resource client.
+  const resourceClientResponse = await auth.handler(new Request(
+    new URL("/api/auth/oauth2/create-client", base), {
+      method: "POST",
+      headers: { "content-type": "application/json", origin: new URL(base).origin, cookie },
+      body: JSON.stringify({
+        client_name: "Disposable MCP introspection client",
+        redirect_uris: ["http://127.0.0.1:8790/callback"],
+        token_endpoint_auth_method: "client_secret_post",
+        scope: "openid profile",
+      }),
+    },
+  ));
+  assert.equal(resourceClientResponse.status, 201);
+  const resourceClient = await resourceClientResponse.json() as Record<string, unknown>;
+  assert.equal(typeof resourceClient.client_secret, "string");
+  const introspect = () => auth.handler(new Request(new URL("/api/auth/oauth2/introspect", base), {
+    method: "POST",
+    headers: { "content-type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({
+      token: String(tokenResult.access_token), token_type_hint: "access_token",
+      client_id: String(resourceClient.client_id), client_secret: String(resourceClient.client_secret),
+    }),
+  }));
+  const activeResponse = await introspect();
+  assert.equal(activeResponse.status, 200);
+  const activeState = await activeResponse.json() as Record<string, unknown>;
+  assert.equal(activeState.active, true, "Linked resource client must be allowed to introspect.");
+  assert.equal(activeState.client_id, client.client_id);
+  assert.equal(activeState.sub, claims.sub);
+  assert.equal(activeState.sid, claims.sid);
+  assert.equal(activeState.exp, claims.exp);
+  assert.equal(activeState.iss, expectedIssuer);
+  const signOut = await auth.handler(new Request(new URL("/api/auth/sign-out", base), {
+    method: "POST", headers: { cookie, origin: new URL(base).origin },
+  }));
+  assert.equal(signOut.status, 200);
+  const endedResponse = await introspect();
+  assert.equal(endedResponse.status, 200);
+  assert.equal((await endedResponse.json() as { active: boolean }).active, false,
+    "Ending the session must invalidate the still-unexpired JWT at introspection.");
+  console.log("PASS: confidential resource introspection accepts active sessions and rejects ended sessions.");
 }
 
 

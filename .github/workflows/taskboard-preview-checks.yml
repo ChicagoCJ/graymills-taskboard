@@ -147,7 +147,7 @@ jobs:
           node-version: '22'
       - name: Install pinned prototype dependencies
         working-directory: experiments/oauth-provider
-        run: npm install --ignore-scripts --no-audit --no-fund
+        run: npm ci --ignore-scripts --no-audit --no-fund
       - name: Typecheck isolated OAuth configuration
         working-directory: experiments/oauth-provider
         run: npm run check
@@ -247,7 +247,7 @@ jobs:
           node-version: '22'
       - name: Install pinned OAuth prototype test dependencies
         working-directory: experiments/oauth-provider
-        run: npm install --ignore-scripts --no-audit --no-fund
+        run: npm ci --ignore-scripts --no-audit --no-fund
       - name: Launch disposable local Supabase services
         working-directory: experiments/oauth-provider
         run: |
@@ -266,3 +266,44 @@ jobs:
         if: always()
         working-directory: experiments/oauth-provider
         run: npx --yes supabase@2.79.0 stop --no-backup || true
+
+  isolated-oauth-resource:
+    name: Isolated OAuth MCP resource
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+      - name: Install Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install locked connector dependencies
+        working-directory: experiments/oauth-resource
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Test OAuth verification and restricted MCP reads
+        working-directory: experiments/oauth-resource
+        run: npm test
+      - name: Typecheck and build disabled connector
+        working-directory: experiments/oauth-resource
+        run: |
+          npm run check
+          npm run build
+      - name: Verify unconfigured connector stays disabled
+        working-directory: experiments/oauth-resource
+        run: |
+          npm start -- --hostname 127.0.0.1 --port 3032 > /tmp/oauth-resource.log 2>&1 &
+          server_pid=$!
+          trap 'kill "$server_pid" 2>/dev/null || true' EXIT
+          for attempt in $(seq 1 30); do
+            if curl --silent --output /dev/null http://127.0.0.1:3032/; then break; fi
+            sleep 1
+          done
+          for path in /api/integrations/chatgpt/mcp /.well-known/oauth-protected-resource/api/integrations/chatgpt/mcp; do
+            status=$(curl --silent --output /dev/null --write-out '%{http_code}' "http://127.0.0.1:3032$path")
+            if [ "$status" != "503" ]; then
+              echo "Expected disabled service (503); received $status"
+              cat /tmp/oauth-resource.log
+              exit 1
+            fi
+          done

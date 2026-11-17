@@ -70,6 +70,9 @@ export const auth = betterAuth({
       loginPage: "/sign-in",
       consentPage: "/consent",
       resource,
+      // The separate resource requires session-bound access tokens with a
+      // five-minute maximum lifetime and performs live introspection.
+      accessTokenExpiresIn: 300,
     }),
     cimd({
       fetchClientMetadataResource,
