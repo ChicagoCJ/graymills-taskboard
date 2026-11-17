@@ -46,7 +46,15 @@ if (inCi) {
   }
 }
 
-export const pool = new Pool({ connectionString: databaseUrl });
+// Enforce certificate verification for the hosted connection and keep each
+// serverless pool within the separately restricted role's small connection cap.
+if (!inCi) postgresUrl.searchParams.set("sslmode", "verify-full");
+export const pool = new Pool({
+  connectionString: inCi ? databaseUrl : postgresUrl.toString(),
+  max: 1,
+  connectionTimeoutMillis: 5000,
+  idleTimeoutMillis: 10000,
+});
 
 export const auth = betterAuth({
   appName: "TaskBoard OAuth isolated prototype",

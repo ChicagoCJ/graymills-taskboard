@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { authClient } from "../../auth-client";
 
 export default function ConsentPage() {
   const [busy, setBusy] = useState(false);
@@ -10,26 +11,10 @@ export default function ConsentPage() {
     setBusy(true);
     setMessage("");
     try {
-      // Better Auth carries a signed OAuth request in the query parameters.
-      const signed = new URLSearchParams(window.location.search);
-      const allowed = new URLSearchParams();
-      for (const key of ["sig", "ba_param"]) {
-        for (const value of signed.getAll(key)) allowed.append(key, value);
-      }
-      if (![...allowed.keys()].length) {
-        throw new Error("Missing signed authorization request.");
-      }
-      const response = await fetch("/api/auth/oauth2/consent", {
-        method: "POST",
-        credentials: "same-origin",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ accept, oauth_query: allowed.toString() }),
-      });
-      if (!response.ok) throw new Error("Consent failed.");
-      const data: { url?: string } = await response.json();
-      if (!data.url) throw new Error("Authorization callback missing.");
-      // The OAuth provider validates the client's registered callback URL.
-      window.location.assign(data.url);
+      const response = await authClient.oauth2.consent({ accept });
+      if (response.error) throw new Error("Consent failed.");
+      // The official client forwards all signed parameters and follows the
+      // provider's validated callback. Do not truncate the signed request.
     } catch {
       setMessage("The authorization request could not be completed.");
       setBusy(false);

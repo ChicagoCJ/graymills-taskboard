@@ -7,7 +7,7 @@ export const dynamic = "force-dynamic";
 async function handle(request: NextRequest) {
   try {
     const { auth } = await import("../../../../auth");
-    return auth.handler(request);
+    return await auth.handler(request);
   } catch {
     return NextResponse.json(
       { error: "OAuth test service is not configured." },

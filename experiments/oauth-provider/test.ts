@@ -6,6 +6,22 @@ import { verifyResourceToken } from "./verify-resource-token.js";
 import { isApprovedTaskBoardResource } from "./resource-contract.js";
 import { auth, pool } from "./auth.js";
 import { oauthProviderAuthServerMetadata } from "@better-auth/oauth-provider";
+import { oauthProviderClient } from "@better-auth/oauth-provider/client";
+
+// Exercise the same signed-query forwarding used by the browser pages.
+async function browserOAuthBody(search: string, body: Record<string, unknown>) {
+  const previousWindow = Object.getOwnPropertyDescriptor(globalThis, "window");
+  Object.defineProperty(globalThis, "window", { configurable: true, value: { location: { search } } });
+  try {
+    const hook = oauthProviderClient().fetchPlugins[0].hooks.onRequest;
+    const context = { method: "POST", headers: new Headers({ "content-type": "application/json" }), body } as unknown as Parameters<typeof hook>[0];
+    await hook(context);
+    return typeof context.body === "string" ? JSON.parse(context.body) : context.body;
+  } finally {
+    if (previousWindow) Object.defineProperty(globalThis, "window", previousWindow);
+    else Reflect.deleteProperty(globalThis, "window");
+  }
+}
 
 
 // The deployed issuer must target the exact protected TaskBoard resource.
@@ -102,7 +118,7 @@ if (process.env.OAUTH_TEST_ENABLE_SIGNUP === "true") {
     }),
   );
   assert.equal(signupResponse.status, 200, "Disposable OAuth user sign-up must succeed.");
-  const cookie = signupResponse.headers.getSetCookie()
+  let cookie = signupResponse.headers.getSetCookie()
     .map((value) => value.split(";")[0])
     .join("; ");
   assert.ok(cookie.includes("session_token"), "Disposable sign-up must create a session.");
@@ -146,6 +162,27 @@ if (process.env.OAUTH_TEST_ENABLE_SIGNUP === "true") {
     code_challenge_method: "S256",
     resource,
   });
+  const loginPrompt = await auth.handler(new Request(new URL(`/api/auth/oauth2/authorize?${params}`, base)));
+  assert.equal(loginPrompt.status, 302);
+  const loginUrl = new URL(loginPrompt.headers.get("location")!, base);
+  assert.equal(loginUrl.pathname, "/sign-in");
+  const signInBody = await browserOAuthBody(loginUrl.search + "&returnTo=https://untrusted.example.test", {
+    email: "oauth-ci-user@example.test", password: "Only-Disposable-CI-Test-Password-4832!",
+    callbackURL: "/",
+  });
+  assert.ok(signInBody.oauth_query, "Browser client must preserve the signed authorization request.");
+  assert.equal(new URLSearchParams(signInBody.oauth_query).has("returnTo"), false);
+  const loginResponse = await auth.handler(new Request(new URL("/api/auth/sign-in/email", base), {
+    method: "POST", headers: { "content-type": "application/json", origin: new URL(base).origin },
+    body: JSON.stringify(signInBody),
+  }));
+  assert.equal(loginResponse.status, 200);
+  const loginData = await loginResponse.json() as { redirect: boolean; url: string };
+  assert.equal(loginData.redirect, true);
+  assert.equal(new URL(loginData.url, base).pathname, "/consent");
+  cookie = loginResponse.headers.getSetCookie().map(value => value.split(";")[0]).join("; ");
+  assert.ok(cookie.includes("session_token"));
+  console.log("PASS: browser sign-in preserves the signed OAuth request and resumes consent.");
   const authorizeResponse = await auth.handler(
     new Request(new URL(`/api/auth/oauth2/authorize?${params}`, base), {
       headers: { cookie },
@@ -160,10 +197,9 @@ if (process.env.OAUTH_TEST_ENABLE_SIGNUP === "true") {
   console.log("PASS: PKCE authorization request enters local consent flow.");
   // Consent must preserve the signed authorization query. Do not log codes
   // or tokens, even though the database and identity are disposable.
-  const signedParamNames = new Set(["sig", "ba_param", ...next.searchParams.getAll("ba_param")]);
-  const signedQuery = new URLSearchParams(
-    [...next.searchParams].filter(([key]) => signedParamNames.has(key)),
-  ).toString();
+  const consentBody = await browserOAuthBody(next.search, { accept: true });
+  assert.equal(new URLSearchParams(consentBody.oauth_query).get("client_id"), client.client_id);
+  assert.equal(new URLSearchParams(consentBody.oauth_query).get("resource"), resource);
   const consentResponse = await auth.handler(
     new Request(new URL("/api/auth/oauth2/consent", base), {
       method: "POST",
@@ -172,7 +208,7 @@ if (process.env.OAUTH_TEST_ENABLE_SIGNUP === "true") {
         origin: new URL(base).origin,
         cookie,
       },
-      body: JSON.stringify({ accept: true, oauth_query: signedQuery }),
+      body: JSON.stringify(consentBody),
     }),
   );
   assert.equal(consentResponse.status, 200, "Signed OAuth consent should succeed.");

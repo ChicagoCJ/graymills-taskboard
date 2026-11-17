@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useState } from "react";
+import { authClient } from "../../auth-client";
 
 export default function SignInPage() {
   const [email, setEmail] = useState("");
@@ -13,22 +14,13 @@ export default function SignInPage() {
     setBusy(true);
     setMessage("");
     try {
-      const response = await fetch("/api/auth/sign-in/email", {
-        method: "POST",
-        credentials: "same-origin",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ email, password }),
-      });
-      if (!response.ok) {
+      const response = await authClient.signIn.email({ email, password, callbackURL: "/" });
+      if (response.error) {
         setMessage("Sign-in unsuccessful. Confirm your test account credentials.");
         return;
       }
-      // Only same-origin, relative paths can be used for post-login navigation.
-      const destination = new URLSearchParams(window.location.search).get("returnTo") || "/";
-      const parsed = new URL(destination, window.location.origin);
-      window.location.assign(
-        parsed.origin === window.location.origin ? parsed.pathname + parsed.search : "/",
-      );
+      // The OAuth client continues the signed flow to consent or the approved
+      // callback. Never construct navigation from an untrusted returnTo value.
     } catch {
       setMessage("Test authentication is unavailable.");
     } finally {
