@@ -90,6 +90,9 @@ After disabled-host verification, a separate configuration/activation gate must:
    method, with no public signup and no employee-account reuse.
 3. Verify ChatGPT's actual client/redirect registration requirements; approve
    exact callback metadata and resource binding. Keep public DCR disabled.
+   Official OpenAI documentation supports CIMD (preferred) or a predefined
+   client. The exact client URL/redirect must be copied from the actual
+   connection setup; do not guess a callback ID or weaken redirect matching.
 4. Register the separate confidential introspection client linked to the resource.
 5. Configure server secrets, approved issuer/resource/client/subject, and the
    restricted Supabase password without printing or sharing credentials.
@@ -101,6 +104,10 @@ After disabled-host verification, a separate configuration/activation gate must:
 No connector is yet configured in ChatGPT. Task assignment visibility and the
 100-task cap remain material limits. Live HTTP INSERT/DELETE/storage-upload
 negative tests and regression across all employee roles are not claimed complete.
+
+Reference checked November 17, 2026:
+https://developers.openai.com/plugins/build/auth — resource discovery, per-tool
+OAuth declarations, S256 PKCE, CIMD and exact issuer/redirect matching.
 
 ## Rollback
 

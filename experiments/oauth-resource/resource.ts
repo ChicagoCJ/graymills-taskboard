@@ -9,6 +9,10 @@ const securityHeaders = {
   "cache-control": "private, no-store, max-age=0",
   "x-content-type-options": "nosniff",
 };
+const toolPolicy = {
+  annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+  _meta: { securitySchemes: [{ type: "oauth2", scopes: ["openid"] }] },
+};
 const json = (body: unknown, status: number, extra = {}) => Response.json(body, {
   status, headers: { ...securityHeaders, ...extra },
 });
@@ -71,14 +75,17 @@ export async function handleResource(request: Request, dependencies: Dependencie
   const handler = createMcpHandler(() => {
     const server = new McpServer({ name: "graymills-taskboard-seo", version: "3.19.0" });
     server.registerTool("seo_project", {
+      ...toolPolicy,
       description: "Read the approved Parts Washers SEO project. Read-only.",
       inputSchema: z.object({}).strict(),
     }, () => read("project"));
     server.registerTool("seo_tasks", {
+      ...toolPolicy,
       description: "Read up to 100 nonarchived SEO tasks visible to the restricted Member. Read-only.",
       inputSchema: z.object({}).strict(),
     }, () => read("tasks"));
     server.registerTool("seo_task", {
+      ...toolPolicy,
       description: "Read one visible task from the approved SEO project. Read-only.",
       inputSchema: z.object({ taskId: z.string().uuid() }).strict(),
     }, ({ taskId }) => read("task", taskId));

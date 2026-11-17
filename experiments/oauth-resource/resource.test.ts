@@ -185,6 +185,11 @@ test("valid OAuth initializes and exposes exactly three read tools without openi
   const data = await unpack(response);
   assert.deepEqual(data.result.tools.map((tool: { name: string }) => tool.name).sort(),
     ["seo_project", "seo_task", "seo_tasks"]);
+  for (const tool of data.result.tools) {
+    assert.equal(tool.annotations.readOnlyHint, true);
+    assert.equal(tool.annotations.destructiveHint, false);
+    assert.deepEqual(tool._meta.securitySchemes, [{ type: "oauth2", scopes: ["openid"] }]);
+  }
   assert.equal(f.calls.length, 2);
 });
 
