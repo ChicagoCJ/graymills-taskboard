@@ -1,0 +1,91 @@
+import { betterAuth } from "better-auth";
+import { jwt } from "better-auth/plugins";
+import { mcp } from "@better-auth/mcp";
+import { cimd } from "@better-auth/cimd";
+import { fetchClientMetadataResource } from "@better-auth/cimd/node";
+import { Pool } from "pg";
+import { PostgresDialect } from "kysely";
+import { isApprovedTaskBoardResource } from "./resource-contract";
+import { hostedDatabaseOptions } from "./hosted-database";
+
+// The existing CI tests use only a disposable loopback database. The
+// deployment branch is separately gated and requires explicit server-only
+// credentials. Never load TaskBoard's production Supabase service-role key.
+const inCi = Boolean(process.env.OAUTH_TEST_DATABASE_URL);
+const databaseUrl = inCi ? process.env.OAUTH_TEST_DATABASE_URL : process.env.OAUTH_DATABASE_URL;
+const secret = inCi ? process.env.OAUTH_TEST_SECRET : process.env.OAUTH_SERVER_SECRET;
+const baseURL = inCi ? process.env.OAUTH_TEST_BASE_URL : process.env.OAUTH_BASE_URL;
+const resource = inCi ? process.env.OAUTH_TEST_RESOURCE : process.env.OAUTH_RESOURCE;
+
+if (!databaseUrl || !secret || !baseURL || !resource) {
+  throw new Error("OAuth authentication is disabled until its server-only configuration is complete.");
+}
+const baseUrl = new URL(baseURL);
+const postgresUrl = new URL(databaseUrl);
+const resourceUrl = new URL(resource);
+const loopbackHosts = new Set(["localhost", "127.0.0.1"]);
+
+if (inCi) {
+  if (!loopbackHosts.has(baseUrl.hostname) ||
+      !loopbackHosts.has(postgresUrl.hostname) ||
+      !loopbackHosts.has(resourceUrl.hostname) ||
+      decodeURIComponent(postgresUrl.pathname) !== "/oauth_ci") {
+    throw new Error("OAuth CI tests accept only disposable local database and resource URLs.");
+  }
+} else {
+  if (process.env.OAUTH_DEPLOY_ENABLED !== "true" ||
+      baseUrl.protocol !== "https:" ||
+      resourceUrl.protocol !== "https:" ||
+      !["postgres:", "postgresql:"].includes(postgresUrl.protocol) ||
+      postgresUrl.hostname !== process.env.OAUTH_ALLOWED_DB_HOST ||
+      !/^chatgpt_oauth_runtime(?:\.[a-z0-9]+)?$/.test(decodeURIComponent(postgresUrl.username)) ||
+      baseUrl.hostname !== process.env.OAUTH_ALLOWED_HOST ||
+      baseUrl.pathname !== "/" ||
+      !isApprovedTaskBoardResource(resource, baseURL, process.env.OAUTH_ALLOWED_RESOURCE_HOST) ||
+      secret.length < 32) {
+    throw new Error("The isolated OAuth server is not authorized for this deployment.");
+  }
+}
+
+// Trust the operator-provided Supabase CA while verifying certificates and
+// hostnames. The isolated CI database remains disposable and loopback-only.
+export const pool = new Pool({
+  ...(inCi ? { connectionString: databaseUrl } :
+    hostedDatabaseOptions(databaseUrl, process.env.OAUTH_DATABASE_CA_CERT)),
+  max: 1,
+  connectionTimeoutMillis: 5000,
+  idleTimeoutMillis: 10000,
+});
+
+export const auth = betterAuth({
+  appName: "TaskBoard OAuth isolated prototype",
+  baseURL,
+  secret,
+  database: {
+    dialect: new PostgresDialect({ pool }),
+    type: "postgres",
+    schemaName: "chatgpt_oauth",
+  },
+  disabledPaths: ["/token"],
+  // Test accounts can be created only when explicitly enabled by the
+  // disposable CI job. Never deploy this prototype to a public hostname.
+  emailAndPassword: {
+    enabled: true,
+    disableSignUp: !inCi || process.env.OAUTH_TEST_ENABLE_SIGNUP !== "true",
+  },
+  plugins: [
+    jwt({ disableSettingJwtHeader: true }),
+    mcp({
+      loginPage: "/sign-in",
+      consentPage: "/consent",
+      resource,
+      // The separate resource requires session-bound access tokens with a
+      // five-minute maximum lifetime and performs live introspection.
+      accessTokenExpiresIn: 300,
+    }),
+    cimd({
+      fetchClientMetadataResource,
+      metadataProfile: "mcp-2026-07-28",
+    }),
+  ],
+});
