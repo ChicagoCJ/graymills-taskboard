@@ -7,6 +7,7 @@ import { isApprovedTaskBoardResource } from "./resource-contract.js";
 import { auth, pool } from "./auth.js";
 import { oauthProviderAuthServerMetadata } from "@better-auth/oauth-provider";
 import { oauthProviderClient } from "@better-auth/oauth-provider/client";
+import { CHATGPT_CLIENT_ID, INTROSPECTION_CLIENT_NAME, checkResourceEnvironment, checkSavedClientEnvironment, registerIntrospectionClient } from "./introspection-client-setup";
 
 // Exercise the same signed-query forwarding used by the browser pages.
 async function browserOAuthBody(search: string, body: Record<string, unknown>) {
@@ -162,6 +163,15 @@ if (process.env.OAUTH_TEST_ENABLE_SIGNUP === "true") {
     code_challenge_method: "S256",
     resource,
   });
+  assert.equal(metadata.authorization_response_iss_parameter_supported, true);
+  const silentParams = new URLSearchParams(params);
+  silentParams.set("prompt", "none");
+  const silentResponse = await auth.handler(new Request(new URL(`/api/auth/oauth2/authorize?${silentParams}`, base)));
+  assert.equal(silentResponse.status, 302);
+  const errorCallback = new URL(silentResponse.headers.get("location")!);
+  assert.equal(errorCallback.origin, "http://127.0.0.1:8787");
+  assert.equal(errorCallback.searchParams.get("error"), "login_required");
+  assert.equal(errorCallback.searchParams.get("iss"), metadata.issuer);
   const loginPrompt = await auth.handler(new Request(new URL(`/api/auth/oauth2/authorize?${params}`, base)));
   assert.equal(loginPrompt.status, 302);
   const loginUrl = new URL(loginPrompt.headers.get("location")!, base);
@@ -219,6 +229,7 @@ if (process.env.OAUTH_TEST_ENABLE_SIGNUP === "true") {
   assert.equal(callbackUrl.origin, "http://127.0.0.1:8787", "Code must target registered callback.");
   assert.equal(callbackUrl.pathname, "/callback", "Code must target exact callback path.");
   assert.equal(callbackUrl.searchParams.get("state"), "ci-test-oauth-state");
+  assert.equal(callbackUrl.searchParams.get("iss"), metadata.issuer);
   const code = callbackUrl.searchParams.get("code");
   assert.ok(code, "User consent must issue a temporary authorization code.");
   console.log("PASS: signed consent issued code for registered callback.");
@@ -362,6 +373,56 @@ if (process.env.OAUTH_TEST_ENABLE_SIGNUP === "true") {
   assert.equal(activeState.sid, claims.sid);
   assert.equal(activeState.exp, claims.exp);
   assert.equal(activeState.iss, expectedIssuer);
+  // The local operator setup uses these real provider endpoints, not direct
+  // inserts or a fabricated client-secret hash. Saving is mocked in CI.
+  assert.equal(CHATGPT_CLIENT_ID, "https://chatgpt.com/oauth/client.json");
+  const envFixture = ["MCP_PUBLIC_RESOURCE", "MCP_OAUTH_ISSUER", "MCP_OAUTH_SUBJECT",
+    "MCP_SUPABASE_PUBLISHABLE_KEY", "MCP_SUPABASE_PASSWORD", "MCP_OAUTH_ENABLED"]
+    .map((key) => ({ key, target: ["production", "preview"] }));
+  checkResourceEnvironment(envFixture);
+  const savedEnvFixture = ["MCP_INTROSPECTION_CLIENT_ID", "MCP_INTROSPECTION_CLIENT_SECRET", "MCP_OAUTH_CLIENT_ID"]
+    .map((key) => ({ key, target: ["production", "preview"] }));
+  checkSavedClientEnvironment(savedEnvFixture);
+  assert.throws(() => checkSavedClientEnvironment(savedEnvFixture.slice(1)), /not completely saved/);
+  assert.throws(() => checkResourceEnvironment(envFixture.slice(1)), /Missing MCP_/);
+  assert.throws(() => checkResourceEnvironment([...envFixture,
+    { key: "MCP_INTROSPECTION_CLIENT_SECRET", target: ["production"] }]), /already exist/);
+  const setupInput = {
+    handler: auth.handler, base, resource, email: "oauth-ci-user@example.test",
+    password: "Only-Disposable-CI-Test-Password-4832!", subject: String(claims.sub),
+  };
+  const beforeKeys = await pool.query('select count(*)::int as n from "chatgpt_oauth"."jwks"');
+  const beforeSessions = await pool.query('select count(*)::int as n from "chatgpt_oauth"."session"');
+  let savedCredential: { clientId: string; clientSecret: string } | undefined;
+  const prepared = await registerIntrospectionClient({ ...setupInput,
+    async persist(value) { savedCredential = value; },
+  });
+  assert(savedCredential && prepared.clientId === savedCredential.clientId);
+  const storedClient = await pool.query('select "clientSecret" from "chatgpt_oauth"."oauthClient" where "clientId"=$1', [prepared.clientId]);
+  assert.notEqual(storedClient.rows[0].clientSecret, savedCredential.clientSecret);
+  const preparedCheck = await auth.handler(new Request(new URL("/api/auth/oauth2/introspect", base), {
+    method: "POST", headers: { "content-type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({ token: String(tokenResult.access_token), token_type_hint: "access_token",
+      client_id: savedCredential.clientId, client_secret: savedCredential.clientSecret }),
+  }));
+  assert.equal(preparedCheck.status, 200);
+  assert.equal((await preparedCheck.json() as { active: boolean }).active, true);
+  const countBeforeFailure = await pool.query('select count(*)::int as n from "chatgpt_oauth"."oauthClient" where "name"=$1', [INTROSPECTION_CLIENT_NAME]);
+  await assert.rejects(registerIntrospectionClient({ ...setupInput,
+    async persist() { throw new Error("Simulated Vercel save failure"); },
+  }), /Simulated Vercel save failure/);
+  const countAfterFailure = await pool.query('select count(*)::int as n from "chatgpt_oauth"."oauthClient" where "name"=$1', [INTROSPECTION_CLIENT_NAME]);
+  assert.equal(countAfterFailure.rows[0].n, countBeforeFailure.rows[0].n);
+  let unexpectedSave = false;
+  await assert.rejects(registerIntrospectionClient({ ...setupInput, subject: "wrong-subject",
+    async persist() { unexpectedSave = true; },
+  }), /does not match/);
+  assert.equal(unexpectedSave, false);
+  const afterKeys = await pool.query('select count(*)::int as n from "chatgpt_oauth"."jwks"');
+  const afterSessions = await pool.query('select count(*)::int as n from "chatgpt_oauth"."session"');
+  assert.equal(afterKeys.rows[0].n, beforeKeys.rows[0].n);
+  assert.equal(afterSessions.rows[0].n, beforeSessions.rows[0].n);
+  console.log("PASS: operator setup uses official registration, verifies credentials, enforces identity and removes temporary sessions/failed clients.");
   const signOut = await auth.handler(new Request(new URL("/api/auth/sign-out", base), {
     method: "POST", headers: { cookie, origin: new URL(base).origin },
   }));
