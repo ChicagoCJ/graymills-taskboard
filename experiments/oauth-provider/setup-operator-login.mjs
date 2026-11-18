@@ -15,7 +15,8 @@ try {
     query_timeout: 15000, statement_timeout: 10000, application_name: "oauth-operator-setup" });
   await client.connect();
   await client.query("begin");
-  result = await prepareOperatorLogin(client, { email: process.env.OAUTH_OPERATOR_EMAIL, password });
+  result = await prepareOperatorLogin(client, { email: process.env.OAUTH_OPERATOR_EMAIL, password,
+    resetSubject: process.env.OAUTH_OPERATOR_RESET_SUBJECT || undefined });
   await client.query("commit");
 } catch (error) {
   if (client) await client.query("rollback").catch(() => {});
@@ -30,7 +31,8 @@ try {
   if (client) await client.end().catch(() => {});
 }
 if (result && !process.exitCode) {
-  console.log(result.created ? "PASS: Dedicated OAuth login created." : "PASS: Existing dedicated OAuth login verified.");
+  console.log(result.reset ? "PASS: Dedicated OAuth login password reset." :
+    result.created ? "PASS: Dedicated OAuth login created." : "PASS: Existing dedicated OAuth login verified.");
   console.log("OAuth subject:", result.id);
   console.log("This setup does not enable OAuth or public signup, or change TaskBoard users.");
 }

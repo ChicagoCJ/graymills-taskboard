@@ -17,9 +17,19 @@ The Node helper verifies the database URL, requires the exact restricted-role
 identity and verifies TLS certificates. Within one transaction it serializes
 setup attempts, checks for existing identities, and inserts one user and one
 credential account using Better Auth's installed password hasher. Email is not
-marked verified. On error it rolls back; it never resets an existing password.
+marked verified. On error it rolls back; default setup never resets an existing password.
 A repeat with the same email and matching password returns the existing OAuth
 subject. Any other existing identity requires review.
+
+When the operator explicitly requests a forgotten-password reset, pass
+`-ResetSubject` with the exact approved OAuth user ID and `-CertificateFile`
+with the downloaded Supabase CA file. This separate mode requires the existing
+email and subject to match, replaces only that user's credential hash, and
+revokes that user's private OAuth access tokens, refresh tokens and sessions
+within the same transaction. The identity is preserved. It cannot create a
+missing user or reset a different identity. It does not change the Supabase
+integration user's password or the database role's password. Save the new
+OAuth password, then use it for the validation-client setup's third prompt.
 
 The result is the private OAuth subject identifier, not a Supabase Auth user ID.
 Keep the new password in a password manager. This helper neither deploys nor

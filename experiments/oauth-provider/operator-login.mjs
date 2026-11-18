@@ -22,11 +22,14 @@ export function hostedOperatorDatabaseUrl(raw, host, projectRef) {
   return url.toString();
 }
 
-export async function prepareOperatorLogin(client, { email, password }) {
+export async function prepareOperatorLogin(client, { email, password, resetSubject }) {
   if (typeof email !== "string" || email !== email.trim().toLowerCase() ||
       email.length > 254 || !/^[a-z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-z0-9.-]+\.[a-z]{2,}$/.test(email) ||
       typeof password !== "string" || password.length < 16 || password.length > 128 || !password.trim()) {
     throw new OperatorSetupError("Use a lowercase email and an OAuth password of 16 to 128 characters.");
+  }
+  if (resetSubject !== undefined && !/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/.test(resetSubject)) {
+    throw new OperatorSetupError("An exact approved OAuth subject is required for a password reset.");
   }
   const role = await client.query(`select current_user as identity,
     rolcanlogin, rolsuper, rolcreatedb, rolcreaterole, rolreplication, rolbypassrls, rolinherit
@@ -49,11 +52,28 @@ export async function prepareOperatorLogin(client, { email, password }) {
         account.providerId !== "credential" || typeof account.password !== "string") {
       throw new OperatorSetupError("An existing OAuth login needs review. Nothing was reset.");
     }
+    if (resetSubject !== undefined) {
+      if (user.id !== resetSubject) {
+        throw new OperatorSetupError("The existing OAuth login does not match the approved reset subject.");
+      }
+      const hash = await hashPassword(password);
+      const updated = await client.query(`update "chatgpt_oauth"."account"
+        set "password"=$1, "updatedAt"=now()
+        where "userId"=$2 and "accountId"=$2 and "providerId"='credential'`, [hash, resetSubject]);
+      if (updated.rowCount !== 1) throw new OperatorSetupError("The approved credential account could not be reset.");
+      // Reset only this identity's OAuth credentials. No TaskBoard/Supabase
+      // Auth password, database-role password or other user's data is touched.
+      await client.query('delete from "chatgpt_oauth"."oauthAccessToken" where "userId"=$1', [resetSubject]);
+      await client.query('delete from "chatgpt_oauth"."oauthRefreshToken" where "userId"=$1', [resetSubject]);
+      await client.query('delete from "chatgpt_oauth"."session" where "userId"=$1', [resetSubject]);
+      return { id: user.id, created: false, reset: true };
+    }
     if (!await verifyPassword({ hash: account.password, password })) {
       throw new OperatorSetupError("The existing OAuth password does not match. Nothing was reset.");
     }
     return { id: user.id, created: false };
   }
+  if (resetSubject !== undefined) throw new OperatorSetupError("The approved existing OAuth login was not found. No new login was created.");
   const id = randomUUID();
   const hash = await hashPassword(password);
   await client.query(`insert into "chatgpt_oauth"."user"
