@@ -2,6 +2,7 @@ import { spawn } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { hostedOperatorDatabaseUrl } from "./operator-login.mjs";
 import { CHATGPT_CLIENT_ID, INTROSPECTION_CLIENT_NAME, checkResourceEnvironment, checkSavedClientEnvironment, registerIntrospectionClient } from "./introspection-client-setup";
+import { VERCEL_STEPS, safeVercelFailure, type VercelStep } from "./vercel-cli-diagnostics";
 
 // Input is provided by masked PowerShell prompts, never command arguments.
 const env = process.env;
@@ -13,7 +14,8 @@ try {
   if (!/^prj_[A-Za-z0-9]+$/.test(project) || !/^team_[A-Za-z0-9]+$/.test(team) ||
       !/^[a-z0-9-]+$/.test(scope) || env.OAUTH_TEST_DATABASE_URL) throw new Error("Invalid operator target.");
 
-  async function vercel(path: string, body?: unknown): Promise<Record<string, unknown>> {
+  async function vercel(step: VercelStep, path: string, body?: unknown): Promise<Record<string, unknown>> {
+    console.log(`CHECK: Vercel ${VERCEL_STEPS[step]}.`);
     const args = ["api", `${path}?teamId=${team}`, "--raw", "--scope", scope];
     if (body !== undefined) args.push("--method", "POST", "--input", "-");
     if (!args.every((value) => /^[A-Za-z0-9_:/?.=-]+$/.test(value))) throw new Error("Invalid CLI request.");
@@ -24,30 +26,31 @@ try {
       for (const key of Object.keys(cliEnv)) if (key.startsWith("OAUTH_")) delete cliEnv[key];
       const child = spawn(command, argv, { stdio: ["pipe", "pipe", "pipe"], windowsHide: true, env: cliEnv });
       let output = "";
+      let diagnostics = "";
       const timer = setTimeout(() => { child.kill(); reject(new Error("Vercel request timed out.")); }, 60000);
       child.stdout.on("data", (data) => {
         output += data.toString();
         if (output.length > 2000000) { child.kill(); reject(new Error("Unexpected Vercel response size.")); }
       });
-      // Capture no CLI diagnostic bodies: an error could contain private env values.
-      child.stderr.on("data", () => {});
+      // Bounded diagnostics are classified, never printed as raw text.
+      child.stderr.on("data", (data) => { diagnostics = (diagnostics + data.toString()).slice(-16000); });
       child.stdin.on("error", () => {});
       child.once("error", () => { clearTimeout(timer); reject(new Error("Vercel CLI could not start.")); });
       child.once("close", (code) => {
         clearTimeout(timer);
-        if (code !== 0) return reject(new Error("Vercel request failed. No secret values were printed."));
+        if (code !== 0) return reject(new Error(safeVercelFailure(step, code, output, diagnostics)));
         try { resolve(JSON.parse(output) as Record<string, unknown>); }
         catch { reject(new Error("Unexpected Vercel response format.")); }
       });
       child.stdin.end(body === undefined ? undefined : JSON.stringify(body));
     });
   }
-  const target = await vercel(`/v9/projects/${project}`);
+  const target = await vercel("project", `/v9/projects/${project}`);
   if (target.id !== project || target.name !== "graymills-chatgpt-mcp-test" ||
       target.rootDirectory !== "experiments/oauth-resource" || target.accountId !== team) {
     throw new Error("The Vercel target is not the approved MCP test project.");
   }
-  const inventory = await vercel(`/v10/projects/${project}/env`);
+  const inventory = await vercel("inventory", `/v10/projects/${project}/env`);
   if (!Array.isArray(inventory.envs)) throw new Error("Could not verify the MCP environment settings.");
   checkResourceEnvironment(inventory.envs as { key: string; target?: string[] }[]);
 
@@ -72,12 +75,12 @@ try {
     email: env.OAUTH_SETUP_EMAIL ?? "", password: env.OAUTH_SETUP_PASSWORD ?? "",
     subject: env.OAUTH_SETUP_SUBJECT ?? "",
     async persist({ clientId, clientSecret }) {
-      await vercel(`/v10/projects/${project}/env`, [
+      await vercel("save", `/v10/projects/${project}/env`, [
         { key: "MCP_INTROSPECTION_CLIENT_ID", value: clientId, type: "encrypted", visibility: "config", target: ["production", "preview"] },
         { key: "MCP_INTROSPECTION_CLIENT_SECRET", value: clientSecret, type: "sensitive", visibility: "secret", target: ["production", "preview"] },
         { key: "MCP_OAUTH_CLIENT_ID", value: CHATGPT_CLIENT_ID, type: "encrypted", visibility: "config", target: ["production", "preview"] },
       ]);
-      const saved = await vercel(`/v10/projects/${project}/env`);
+      const saved = await vercel("verify", `/v10/projects/${project}/env`);
       if (!Array.isArray(saved.envs)) throw new Error("Vercel client settings could not be confirmed.");
       checkSavedClientEnvironment(saved.envs as { key: string; target?: string[] }[]);
     },

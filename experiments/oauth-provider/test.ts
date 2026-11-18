@@ -8,6 +8,15 @@ import { auth, pool } from "./auth.js";
 import { oauthProviderAuthServerMetadata } from "@better-auth/oauth-provider";
 import { oauthProviderClient } from "@better-auth/oauth-provider/client";
 import { CHATGPT_CLIENT_ID, INTROSPECTION_CLIENT_NAME, checkResourceEnvironment, checkSavedClientEnvironment, registerIntrospectionClient } from "./introspection-client-setup";
+import { safeVercelFailure } from "./vercel-cli-diagnostics";
+
+const secretSentinel = "fixture-private-value-do-not-print";
+assert.match(safeVercelFailure("save", 1, JSON.stringify({ error: { code: "bad_request", message: secretSentinel } }), secretSentinel), /client settings save.*bad_request/);
+assert.match(safeVercelFailure("project", 1, "", "The specified token is not valid"), /project lookup.*authentication rejected/);
+assert.match(safeVercelFailure("inventory", 1, "", "unknown or unexpected option"), /environment inventory.*option rejected/);
+for (const output of [secretSentinel, JSON.stringify({ error: { code: secretSentinel, message: secretSentinel } })]) {
+  assert(!safeVercelFailure("save", 1, output, secretSentinel).includes(secretSentinel));
+}
 
 // Exercise the same signed-query forwarding used by the browser pages.
 async function browserOAuthBody(search: string, body: Record<string, unknown>) {
