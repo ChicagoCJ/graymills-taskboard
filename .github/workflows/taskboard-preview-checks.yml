@@ -214,6 +214,9 @@ jobs:
       - name: Verify hosted database CA and hostname enforcement
         working-directory: experiments/oauth-provider
         run: node --import tsx test-hosted-database.ts
+      - name: Verify auth startup diagnostics contain no private configuration
+        working-directory: experiments/oauth-provider
+        run: node --import tsx test-auth-failure.ts
       - name: Verify proposed integration RLS isolation in disposable PostgreSQL
         working-directory: experiments/oauth-provider
         run: node verify-integration-rls.mjs
@@ -238,6 +241,32 @@ jobs:
       - name: Test fail-closed OAuth authorization request
         working-directory: experiments/oauth-provider
         run: npm run test
+      - name: Verify configured production Next.js OAuth routes against disposable PostgreSQL
+        working-directory: experiments/oauth-provider
+        run: |
+          npm run start -- --hostname 127.0.0.1 --port 3032 > /tmp/oauth-configured-server.log 2>&1 &
+          server_pid=$!
+          trap 'kill "$server_pid" 2>/dev/null || true' EXIT
+          for attempt in $(seq 1 30); do
+            if curl --silent --output /dev/null http://127.0.0.1:3032/api/auth/get-session; then
+              break
+            fi
+            sleep 1
+          done
+          if ! node --input-type=module <<'JS'
+          import assert from 'node:assert/strict';
+          const discovery = await fetch('http://127.0.0.1:3032/.well-known/oauth-authorization-server/api/auth');
+          assert.equal(discovery.status, 200);
+          const metadata = await discovery.json();
+          assert.equal(metadata.issuer, new URL('/api/auth', process.env.OAUTH_TEST_BASE_URL).toString());
+          const session = await fetch('http://127.0.0.1:3032/api/auth/get-session');
+          assert.equal(session.status, 200);
+          console.log('PASS: configured production Next.js discovery and session routes initialize successfully.');
+          JS
+          then
+            cat /tmp/oauth-configured-server.log
+            exit 1
+          fi
 
 
   isolated-supabase-auth-storage:

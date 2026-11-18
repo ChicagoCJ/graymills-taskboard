@@ -54,3 +54,16 @@ CI exercises the actual registration and introspection APIs, checks hashed
 secret storage, verifies identity restrictions, confirms cleanup after a save
 failure, and checks that session/signing-key counts are preserved. Vercel writes
 are mocked; the user-run operator command performs the live configuration.
+
+## Hosted startup diagnostics
+
+Auth routes keep public failures generic and write only
+`TASKBOARD_OAUTH_FAILURE` plus a fixed diagnostic code to the private runtime
+log. They never log an exception's message, stack, URL, inputs or configuration
+values. Codes distinguish missing/rejected settings, an invalid CA, invalid
+URLs, unavailable runtime modules, and database connection/permission failures.
+The discovery route awaits its handler so asynchronous failures are covered.
+
+CI additionally starts the compiled production Next.js server with disposable
+loopback database settings and checks successful discovery and session routes.
+No live credentials are used for that test.
