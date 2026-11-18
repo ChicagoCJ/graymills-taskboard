@@ -31,3 +31,21 @@ credential creation, matching repeat calls, rejection of mismatched passwords
 and unexpected identities, and rollback of all fixtures. URL tests reject
 administrative logins, other projects, other databases and transaction-pooler
 ports. The existing permission tests cover public and Supabase Auth isolation.
+
+## Hosted database certificate
+
+The hosted auth service also needs `OAUTH_DATABASE_CA_CERT`: the complete PEM
+contents of the CA certificate downloaded from the approved Supabase project's
+Database Settings / SSL Configuration. Configure it in both test-project
+deployment environments while keeping `OAUTH_DEPLOY_ENABLED=false`.
+
+The hosted pool supplies this CA explicitly with certificate and hostname
+verification enabled. Connection-string query parameters cannot override that
+policy. A missing, malformed, expired or non-CA certificate prevents startup of
+authentication. The local TLS fixture verifies trusted connections and rejection
+of untrusted certificates and hostname mismatches, without a live database.
+
+For local operator setup, point `NODE_EXTRA_CA_CERTS` to the downloaded PEM file
+before starting Node; `NODE_USE_SYSTEM_CA=1` may additionally load the Windows
+trust store. Restore the prior process environment after setup. Never disable
+certificate verification to work around a trust error.

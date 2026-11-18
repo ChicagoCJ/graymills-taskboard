@@ -211,6 +211,9 @@ jobs:
       - name: Verify private operator login setup without public signup
         working-directory: experiments/oauth-provider
         run: node test-operator-login.mjs
+      - name: Verify hosted database CA and hostname enforcement
+        working-directory: experiments/oauth-provider
+        run: node --import tsx test-hosted-database.ts
       - name: Verify proposed integration RLS isolation in disposable PostgreSQL
         working-directory: experiments/oauth-provider
         run: node verify-integration-rls.mjs

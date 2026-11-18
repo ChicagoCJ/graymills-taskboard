@@ -6,6 +6,7 @@ import { fetchClientMetadataResource } from "@better-auth/cimd/node";
 import { Pool } from "pg";
 import { PostgresDialect } from "kysely";
 import { isApprovedTaskBoardResource } from "./resource-contract";
+import { hostedDatabaseOptions } from "./hosted-database";
 
 // The existing CI tests use only a disposable loopback database. The
 // deployment branch is separately gated and requires explicit server-only
@@ -46,11 +47,11 @@ if (inCi) {
   }
 }
 
-// Enforce certificate verification for the hosted connection and keep each
-// serverless pool within the separately restricted role's small connection cap.
-if (!inCi) postgresUrl.searchParams.set("sslmode", "verify-full");
+// Trust the operator-provided Supabase CA while verifying certificates and
+// hostnames. The isolated CI database remains disposable and loopback-only.
 export const pool = new Pool({
-  connectionString: inCi ? databaseUrl : postgresUrl.toString(),
+  ...(inCi ? { connectionString: databaseUrl } :
+    hostedDatabaseOptions(databaseUrl, process.env.OAUTH_DATABASE_CA_CERT)),
   max: 1,
   connectionTimeoutMillis: 5000,
   idleTimeoutMillis: 10000,
