@@ -32,6 +32,12 @@ each for Production and Preview. The generated credential is used only by the
 resource server to validate live sessions. It is not ChatGPT's OAuth client
 secret. The command confirms all settings were saved before reporting success.
 
+The operator saves one environment-variable object per CLI request. Vercel CLI
+53.0.1's bundled `Client._fetch` serializes plain objects but leaves a top-level
+array unchanged, despite the REST API accepting arrays. A bulk array therefore
+fails through that CLI. The regression test requires plain-object request bodies
+and preserves literal percent characters without URL-encoding credential values.
+
 ChatGPT uses CIMD with `https://chatgpt.com/oauth/client.json`. This issuer
 advertises RFC 9207 support; disposable tests verify matching issuer parameters
 in successful and error authorization callbacks. OpenAI documents the stable

@@ -7,10 +7,22 @@ import { isApprovedTaskBoardResource } from "./resource-contract.js";
 import { auth, pool } from "./auth.js";
 import { oauthProviderAuthServerMetadata } from "@better-auth/oauth-provider";
 import { oauthProviderClient } from "@better-auth/oauth-provider/client";
-import { CHATGPT_CLIENT_ID, INTROSPECTION_CLIENT_NAME, checkResourceEnvironment, checkSavedClientEnvironment, registerIntrospectionClient } from "./introspection-client-setup";
+import { CHATGPT_CLIENT_ID, INTROSPECTION_CLIENT_NAME, checkResourceEnvironment, checkSavedClientEnvironment, registerIntrospectionClient, saveClientEnvironment } from "./introspection-client-setup";
 import { safeVercelFailure } from "./vercel-cli-diagnostics";
 
 const secretSentinel = "fixture-private-value-do-not-print";
+const savedRequests: Record<string, unknown>[] = [];
+await saveClientEnvironment({ clientId: "fixture-client", clientSecret: "fixture-secret-with-%-character" }, async (entry) => {
+  // The installed CLI's plain-object predicate, verified against 53.0.1.
+  assert(entry && typeof entry === "object" && entry.constructor === Object);
+  savedRequests.push(JSON.parse(JSON.stringify(entry)));
+});
+assert.equal(savedRequests.length, 3);
+assert.equal(savedRequests[1].value, "fixture-secret-with-%-character");
+assert.equal(savedRequests[1].type, "sensitive");
+assert.equal(savedRequests[1].visibility, "secret");
+assert.deepEqual(savedRequests[1].target, ["production", "preview"]);
+assert(savedRequests.every((entry) => entry.key !== "MCP_OAUTH_ENABLED"));
 assert.match(safeVercelFailure("save", 1, JSON.stringify({ error: { code: "bad_request", message: secretSentinel } }), secretSentinel), /client settings save.*bad_request/);
 assert.match(safeVercelFailure("project", 1, "", "The specified token is not valid"), /project lookup.*authentication rejected/);
 assert.match(safeVercelFailure("inventory", 1, "", "unknown or unexpected option"), /environment inventory.*option rejected/);

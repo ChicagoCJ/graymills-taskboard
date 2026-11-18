@@ -2,6 +2,18 @@
 export const CHATGPT_CLIENT_ID = "https://chatgpt.com/oauth/client.json";
 export const INTROSPECTION_CLIENT_NAME = "TaskBoard MCP session validation";
 export type ClientCredentials = { clientId: string; clientSecret: string };
+
+export async function saveClientEnvironment(credentials: ClientCredentials,
+  saveOne: (entry: { key: string; value: string; type: string; visibility: string; target: string[] }) => Promise<void>) {
+  // Vercel CLI 53.0.1 serializes only plain JSON objects in Client._fetch.
+  // Passing the REST API's supported top-level array through that CLI leaves
+  // it unserialized. Keep every request body an individual object instead.
+  for (const entry of [
+    { key: "MCP_INTROSPECTION_CLIENT_ID", value: credentials.clientId, type: "encrypted", visibility: "config", target: ["production", "preview"] },
+    { key: "MCP_INTROSPECTION_CLIENT_SECRET", value: credentials.clientSecret, type: "sensitive", visibility: "secret", target: ["production", "preview"] },
+    { key: "MCP_OAUTH_CLIENT_ID", value: CHATGPT_CLIENT_ID, type: "encrypted", visibility: "config", target: ["production", "preview"] },
+  ]) await saveOne(entry);
+}
 export function checkSavedClientEnvironment(envs: { key: string; target?: string[] }[]) {
   for (const key of ["MCP_INTROSPECTION_CLIENT_ID", "MCP_INTROSPECTION_CLIENT_SECRET", "MCP_OAUTH_CLIENT_ID"]) {
     for (const target of ["production", "preview"]) {

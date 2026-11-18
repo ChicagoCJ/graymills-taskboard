@@ -1,7 +1,7 @@
 import { spawn } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { hostedOperatorDatabaseUrl } from "./operator-login.mjs";
-import { CHATGPT_CLIENT_ID, INTROSPECTION_CLIENT_NAME, checkResourceEnvironment, checkSavedClientEnvironment, registerIntrospectionClient } from "./introspection-client-setup";
+import { INTROSPECTION_CLIENT_NAME, checkResourceEnvironment, checkSavedClientEnvironment, registerIntrospectionClient, saveClientEnvironment } from "./introspection-client-setup";
 import { VERCEL_STEPS, safeVercelFailure, type VercelStep } from "./vercel-cli-diagnostics";
 
 // Input is provided by masked PowerShell prompts, never command arguments.
@@ -75,11 +75,9 @@ try {
     email: env.OAUTH_SETUP_EMAIL ?? "", password: env.OAUTH_SETUP_PASSWORD ?? "",
     subject: env.OAUTH_SETUP_SUBJECT ?? "",
     async persist({ clientId, clientSecret }) {
-      await vercel("save", `/v10/projects/${project}/env`, [
-        { key: "MCP_INTROSPECTION_CLIENT_ID", value: clientId, type: "encrypted", visibility: "config", target: ["production", "preview"] },
-        { key: "MCP_INTROSPECTION_CLIENT_SECRET", value: clientSecret, type: "sensitive", visibility: "secret", target: ["production", "preview"] },
-        { key: "MCP_OAUTH_CLIENT_ID", value: CHATGPT_CLIENT_ID, type: "encrypted", visibility: "config", target: ["production", "preview"] },
-      ]);
+      await saveClientEnvironment({ clientId, clientSecret }, async (entry) => {
+        await vercel("save", `/v10/projects/${project}/env`, entry);
+      });
       const saved = await vercel("verify", `/v10/projects/${project}/env`);
       if (!Array.isArray(saved.envs)) throw new Error("Vercel client settings could not be confirmed.");
       checkSavedClientEnvironment(saved.envs as { key: string; target?: string[] }[]);
