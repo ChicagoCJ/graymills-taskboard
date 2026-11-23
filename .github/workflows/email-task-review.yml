@@ -1,0 +1,35 @@
+name: Email task review checks
+
+on:
+  push:
+    branches: [feature/email-task-review]
+  pull_request:
+    paths:
+      - src/components/EmailTaskReview.tsx
+      - src/lib/emailTaskDraft.ts
+      - src/app/page.tsx
+      - tests/email-task-review.test.mjs
+      - package.json
+      - package-lock.json
+      - .github/workflows/email-task-review.yml
+
+permissions:
+  contents: read
+
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      NEXT_PUBLIC_SUPABASE_URL: https://example.supabase.co
+      NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: build-only-placeholder
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: npm run test:email-review
+      - run: npx eslint src/components/EmailTaskReview.tsx src/lib/emailTaskDraft.ts
+      - run: npm run build
