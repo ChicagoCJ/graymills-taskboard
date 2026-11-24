@@ -1,6 +1,8 @@
 # Email task review
 
-Email-created tasks now go through a review panel in TaskBoard rather than silently taking quick-add defaults.
+Email-created tasks now go through a full-width review panel above Quick Add rather than silently taking quick-add defaults or occupying a narrow board-controls column. Notes use normal-weight text, file controls are secondary, and source-email details are collapsed until needed.
+
+For the Outlook desktop entry point, see `outlook-addin/README.md`. That companion add-in reads the message selected in Outlook and opens this same review form in the browser; ChatGPT is not required for that path. The natural-language search path below remains available in ChatGPT. No mailbox search box is added to TaskBoard.
 
 ## Workflow
 
@@ -44,7 +46,7 @@ Saved-email files and manual JSON remain optional fallback inputs under the pane
 
 ## Permissions and reliability
 
-Creation uses the existing signed-in TaskBoard Supabase client and existing row-level policies. This change adds no elevated database credentials, policies, migrations, direct Outlook mailbox access, or write tools to the SEO connector. No task or email was created or changed during automated verification.
+Creation uses the existing signed-in TaskBoard Supabase client and existing row-level policies. TaskBoard gains no elevated database credentials, policies, migrations, mailbox-wide access, or write tools in the SEO connector. The companion Outlook add-in separately uses Office's ReadItem permission for the selected message. No task or email was created or changed during automated verification.
 
 Task, assignment, file, and activity writes use the existing separate operations. They are not a database transaction. If follow-up operations fail after the task has been inserted, the panel returns the created task reference and a warning instead of offering to create that task again. Correct the existing task in TaskBoard.
 

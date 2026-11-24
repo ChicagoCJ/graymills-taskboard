@@ -9,6 +9,8 @@ on:
       - src/lib/emailTaskDraft.ts
       - src/app/page.tsx
       - tests/email-task-review.test.mjs
+      - outlook-addin/**
+      - tests/outlook-addin.test.mjs
       - package.json
       - package-lock.json
       - .github/workflows/email-task-review.yml
@@ -31,5 +33,6 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run test:email-review
+      - run: npm run test:outlook-addin
       - run: npx eslint src/components/EmailTaskReview.tsx src/lib/emailTaskDraft.ts
       - run: npm run build

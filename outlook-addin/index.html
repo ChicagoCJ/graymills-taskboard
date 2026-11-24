@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="referrer" content="no-referrer">
+  <title>Graymills TaskBoard</title>
+  <link rel="stylesheet" href="styles.css">
+  <script src="https://appsforoffice.microsoft.com/lib/1/hosted/office.js"></script>
+  <script type="module" src="taskpane.js"></script>
+</head>
+<body>
+  <main>
+    <p class="eyebrow">GRAYMILLS TASKBOARD</p>
+    <h1>Create a task from this email</h1>
+    <p>Open a spacious review in TaskBoard, choose the owner and other details, then confirm.</p>
+    <section aria-label="Selected email"><p class="label">Selected email</p><p id="subject">Loading selected email…</p><p id="sender" class="muted"></p></section>
+    <button id="review" disabled>Review task in TaskBoard</button>
+    <p id="status" role="status" aria-live="polite">Connecting to Outlook…</p>
+    <p class="muted">The selected email’s subject, sender, link, and a short text excerpt go into the draft. Nothing is created until you confirm in TaskBoard.</p>
+  </main>
+</body>
+</html>

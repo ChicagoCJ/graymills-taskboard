@@ -13,7 +13,7 @@ type Props = {
   teams: Option[];
   onCreate: (task: ReviewedEmailTask, file: File | null, requestId: string) => Promise<{ taskId: string; warning?: string }>;
 };
-const inputStyle = "mt-1 w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900";
+const inputStyle = "mt-1 w-full min-w-0 rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm font-normal text-slate-900";
 const labelStyle = "block text-xs font-semibold text-slate-700";
 
 export default function EmailTaskReview({ projects, people, teams, onCreate }: Props) {
@@ -125,9 +125,9 @@ export default function EmailTaskReview({ projects, people, teams, onCreate }: P
     } finally { saving.current = false; setBusy(false); }
   }
 
-  return <section id="email-task-review" className="mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-4" aria-labelledby="email-task-heading">
+  return <section id="email-task-review" className="min-w-0 rounded-2xl bg-white p-2 sm:p-4" aria-labelledby="email-task-heading">
     <h3 id="email-task-heading" className="font-semibold text-slate-950">Create task from email</h3>
-    <p className="mt-1 text-sm text-slate-600">Ask ChatGPT to find an Outlook email, then open its TaskBoard review link. Review every detail here before creating the task.</p>
+    <p className="mt-1 text-sm text-slate-600">Open a draft from the TaskBoard button in Outlook or from a ChatGPT review link. Confirm the details below before creating the task.</p>
     {!task && <details className="mt-4 space-y-3">
       <summary className="cursor-pointer text-sm font-semibold text-slate-700">Other ways to open a draft</summary>
       <label className={labelStyle}>Paste a task draft from ChatGPT
@@ -138,16 +138,16 @@ export default function EmailTaskReview({ projects, people, teams, onCreate }: P
       }}>Review draft</button>
       <p className="text-xs text-slate-500">Or start with a saved Outlook email. The file supplies its name; review and enter the task details.</p>
     </details>}
-    {!result && <div className="mt-3 flex flex-wrap items-center gap-3" onDragOver={e => e.preventDefault()} onDrop={e => { e.preventDefault(); if (!busy) chooseFile(e.dataTransfer.files[0]); }}>
+    {!result && <details className="mt-3 text-sm text-slate-600"><summary className="cursor-pointer">{file ? `Attached email: ${file.name}` : "Attach an original email file (optional)"}</summary><div className="mt-3 flex flex-wrap items-center gap-3" onDragOver={e => e.preventDefault()} onDrop={e => { e.preventDefault(); if (!busy) chooseFile(e.dataTransfer.files[0]); }}>
       <button type="button" disabled={busy} className="rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm" onClick={() => fileInput.current?.click()}>{file ? "Replace email file" : "Choose or drop email file"}</button>
       <input ref={fileInput} aria-label="Original email file" className="sr-only" type="file" accept=".msg,.eml" disabled={busy} onChange={e => { chooseFile(e.target.files?.[0] || null); e.target.value = ""; }} />
       {file && <><span className="text-xs text-slate-600">{file.name}</span><button type="button" disabled={busy} className="text-xs underline" onClick={() => { setFile(null); setConfirmed(false); }}>Remove file</button></>}
-    </div>}
+    </div></details>}
     {task && draft && !result && <fieldset disabled={busy} className="mt-4 space-y-4">
       {(draft.suggestedOwner || draft.suggestedProject) && <p className="rounded-xl border border-blue-200 bg-blue-50 p-3 text-sm text-blue-950">Suggested owner: {draft.suggestedOwner || "Not specified"}. Suggested project: {draft.suggestedProject || "Not specified"}. Confirm the matching selections below.</p>}
       <label className={labelStyle}>Task title<input className={inputStyle} value={task.title} maxLength={300} onChange={e => patch({ title: e.target.value })} /></label>
       <label className={labelStyle}>Task notes and next action<textarea className={inputStyle} rows={4} maxLength={20000} value={task.description} onChange={e => patch({ description: e.target.value })} /></label>
-      <div className="grid gap-4 sm:grid-cols-2">
+      <div className="grid min-w-0 gap-4 md:grid-cols-2 xl:grid-cols-3">
         <label className={labelStyle}>Owner<select className={inputStyle} value={task.profileId} onChange={e => patch({ profileId: e.target.value })}><option value="">Choose owner…</option><option value="__none__">Team only — no individual owner</option>{people.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</select></label>
         <label className={labelStyle}>Team<select className={inputStyle} value={task.teamId} onChange={e => patch({ teamId: e.target.value })}><option value="__none__">No team</option>{teams.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}</select></label>
         <label className={labelStyle}>Project<select className={inputStyle} value={task.projectId} onChange={e => patch({ projectId: e.target.value })}><option value="">Choose project…</option><option value="__none__">No project</option>{projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</select></label>
@@ -156,15 +156,15 @@ export default function EmailTaskReview({ projects, people, teams, onCreate }: P
         <div><label className={labelStyle}>Due date<select className={inputStyle} value={dueChoice} onChange={e => { setDueChoice(e.target.value); setConfirmed(false); }}><option value="">Choose due date…</option><option value="none">No due date</option><option value="date">Choose a date</option></select></label>{dueChoice === "date" && <input aria-label="Task due date" className={inputStyle} type="date" value={task.dueDate} onChange={e => patch({ dueDate: e.target.value })} />}</div>
         <div><label className={labelStyle}>Reminder<select className={inputStyle} value={reminderChoice} onChange={e => { setReminderChoice(e.target.value); setConfirmed(false); }}><option value="">Choose reminder…</option><option value="none">No reminder</option><option value="date">Choose a date and time</option></select></label>{reminderChoice === "date" && <><input aria-label="Reminder date and time" className={inputStyle} type="datetime-local" value={task.reminderAt} onChange={e => patch({ reminderAt: e.target.value })} /><input aria-label="Reminder note" className={inputStyle} placeholder="Reminder note" value={task.reminderNote} onChange={e => patch({ reminderNote: e.target.value })} /><p className="mt-1 text-xs text-slate-500">Uses your browser’s local time zone.</p></>}</div>
       </div>
-      <details className="rounded-xl border border-slate-200 bg-white p-3" open>
-        <summary className="cursor-pointer text-sm font-semibold">Source email</summary>
+      <details className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+        <summary className="cursor-pointer text-sm font-semibold">Source email: {task.source.subject}</summary>
         <label className={`${labelStyle} mt-3`}>Email subject<input className={inputStyle} value={task.source.subject} maxLength={500} onChange={e => patch({ source: { ...task.source, subject: e.target.value } })} /></label>
         <label className={`${labelStyle} mt-3`}>From<input className={inputStyle} value={task.source.from || ""} onChange={e => patch({ source: { ...task.source, from: e.target.value } })} /></label>
         <label className={`${labelStyle} mt-3`}>Received<input className={inputStyle} value={task.source.receivedAt || ""} onChange={e => patch({ source: { ...task.source, receivedAt: e.target.value } })} /></label>
         <label className={`${labelStyle} mt-3`}>Outlook message link<input className={inputStyle} type="url" value={task.source.url || ""} maxLength={4000} onChange={e => patch({ source: { ...task.source, url: e.target.value || undefined } })} /></label>
       </details>
       <label className="flex items-start gap-2 text-sm text-slate-800"><input className="mt-1" type="checkbox" checked={confirmed} onChange={e => setConfirmed(e.target.checked)} />I reviewed the title, notes, owner, team, project, status, priority, due date, reminder, and source email.</label>
-      <div className="flex gap-3"><button type="button" disabled={!confirmed || busy} className="rounded-xl bg-slate-950 px-4 py-2 text-sm font-semibold text-white disabled:bg-slate-400" onClick={create}>{busy ? "Creating task…" : "Confirm & create task"}</button><button type="button" className="rounded-xl border border-slate-300 px-4 py-2 text-sm" onClick={() => { draftActive.current = false; setTask(null); setDraft(null); setFile(null); setConfirmed(false); setMessage(""); }}>Cancel</button></div>
+      <div className="flex flex-wrap gap-3 border-t border-slate-200 pt-4"><button type="button" disabled={!confirmed || busy} className="rounded-xl bg-slate-950 px-4 py-2 text-sm font-semibold text-white disabled:bg-slate-400" onClick={create}>{busy ? "Creating task…" : "Confirm & create task"}</button><button type="button" className="rounded-xl border border-slate-300 px-4 py-2 text-sm" onClick={() => { draftActive.current = false; setTask(null); setDraft(null); setFile(null); setConfirmed(false); setMessage(""); }}>Cancel</button></div>
     </fieldset>}
     {result && <div role="status" className="mt-4 rounded-xl border border-slate-300 bg-white p-4"><p className="font-semibold">{result.warning ? "Task created — follow-up needed" : "Email task created"}</p><p className="mt-1 text-sm">{task?.title}</p>{result.warning && <p className="mt-2 text-sm text-amber-900">{result.warning} Check the existing task before doing anything else; do not create a second copy.</p>}<p className="mt-2 text-xs text-slate-500">Task reference: {result.taskId}</p><button type="button" className="mt-3 text-sm underline" onClick={() => { draftActive.current = false; setResult(null); setTask(null); setDraft(null); setFile(null); setJson(""); setConfirmed(false); }}>Start another task</button></div>}
     {message && <p role="alert" className="mt-3 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-950">{message}</p>}

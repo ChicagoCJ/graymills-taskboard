@@ -1,0 +1,14 @@
+* { box-sizing: border-box; }
+body { margin: 0; background: #f6f8fb; color: #172335; font: 15px/1.5 "Segoe UI", system-ui, sans-serif; }
+main { max-width: 600px; margin: auto; padding: 24px 20px; }
+h1 { margin: 8px 0 12px; font-size: 24px; line-height: 1.2; }
+p { margin: 12px 0; }
+.eyebrow { font-size: 11px; letter-spacing: .1em; font-weight: 700; color: #305381; }
+section { padding: 16px; margin: 24px 0; background: white; border: 1px solid #d6dfeb; border-radius: 12px; overflow-wrap: anywhere; }
+.label { color: #516175; font-size: 12px; margin-top: 0; }
+#subject { font-weight: 600; }
+.muted { color: #5c6b7b; font-size: 12px; }
+button { width: 100%; padding: 14px 12px; border: 0; border-radius: 9px; background: #173e6c; color: white; font: inherit; font-weight: 600; cursor: pointer; }
+button:disabled { background: #98a8bc; cursor: default; }
+button:focus-visible { outline: 3px solid #68a4e4; outline-offset: 3px; }
+#status { font-size: 13px; }

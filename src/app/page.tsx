@@ -12,7 +12,7 @@ import { supabase } from "@/lib/supabaseClient";
 import EmailTaskReview from "@/components/EmailTaskReview";
 import { emailTaskDescription, type ReviewedEmailTask } from "@/lib/emailTaskDraft";
 
-const APP_REVISION = "Version 3.15 — Create users from Admin";
+const APP_REVISION = "Outlook email tasks — Preview";
 
 const statusColumns = [
   {
@@ -5362,7 +5362,15 @@ export default function Home() {
       )}
 
       <section className="mx-auto max-w-[1600px] px-4 py-4 sm:px-6">
-        <div className="grid gap-3 xl:grid-cols-[minmax(0,2fr)_320px]">
+        <div className="mb-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+            <EmailTaskReview
+              projects={projects.map(project => ({ id: project.id, name: project.name }))}
+              people={profiles.map(person => ({ id: person.id, name: person.full_name && person.email ? `${person.full_name} (${person.email})` : person.full_name || person.email || "Unnamed person" }))}
+              teams={teams.map(team => ({ id: team.id, name: team.name }))}
+              onCreate={createReviewedEmailTask}
+            />
+          </div>
+        <div className="grid items-start gap-3 xl:grid-cols-[minmax(0,2fr)_320px]">
           <form
             onSubmit={handleQuickAdd}
             className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"
@@ -5439,14 +5447,7 @@ export default function Home() {
 
           </form>
 
-          <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-            <EmailTaskReview
-              projects={projects.map(project => ({ id: project.id, name: project.name }))}
-              people={profiles.map(person => ({ id: person.id, name: person.full_name && person.email ? `${person.full_name} (${person.email})` : person.full_name || person.email || "Unnamed person" }))}
-              teams={teams.map(team => ({ id: team.id, name: team.name }))}
-              onCreate={createReviewedEmailTask}
-            />
-          </div>
+
 
           <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
             <h2 className="text-sm font-semibold text-slate-900">
