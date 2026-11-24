@@ -114,9 +114,29 @@ test("opening a ChatGPT review link populates the form and removes the fragment 
     assert.equal(label("Task title").value, draft.title);
     assert.equal(label("Outlook message link").value, draft.source.url);
     assert.equal(label("Owner").value, "");
+    assert.equal(document.getElementById("email-task-fields").hidden, false);
     assert.equal(window.location.hash, "");
     assert.equal(saves, 0);
     assert(button("Confirm & create task").disabled);
+  } finally { await unmount(); }
+});
+
+test("the task form starts collapsed and hiding preserves edits while clearing confirmation", async () => {
+  let saves = 0;
+  const unmount = await mount(async () => { saves++; return { taskId: "unused" }; });
+  try {
+    assert.equal(document.getElementById("email-task-fields").hidden, true);
+    assert.equal(button("Show task form").getAttribute("aria-expanded"), "false");
+    await click(button("Show task form"));
+    await openDraft();
+    await change(label("Task title"), "Keep these edits while hidden");
+    await click(checkbox());
+    await click(button("Hide task form"));
+    assert.equal(document.getElementById("email-task-fields").hidden, true);
+    await click(button("Show task form"));
+    assert.equal(label("Task title").value, "Keep these edits while hidden");
+    assert.equal(checkbox().checked, false);
+    assert.equal(saves, 0);
   } finally { await unmount(); }
 });
 

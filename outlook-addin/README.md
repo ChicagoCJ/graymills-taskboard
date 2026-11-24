@@ -10,7 +10,7 @@ The static assets must be reachable by Office over HTTPS without a Vercel sign-i
 
 `config.js` points to the existing TaskBoard review-branch alias for pilot testing. A normal TaskBoard user may create a real task there after confirmation; this is not an isolated test database. The source email link opens in Outlook on the web; validate the link for the user's mailbox during acceptance.
 
-The connected Vercel account returned HTTP 403 for creation of the separate project. There is no local authenticated Vercel CLI in the execution environment. Hosting and a desktop Outlook acceptance test therefore remain pending. Use the developer's existing Vercel CLI login on Windows with `scripts/deploy-outlook-addin.ps1`. The script is restricted to the named new project and exact team, checks any existing folder link, and never patches the main TaskBoard or OAuth projects. It has not been executed against Vercel in this environment.
+The connected Vercel account returned HTTP 403 for creation of the separate project, so hosting used the operator's Windows CLI login with `scripts/deploy-outlook-addin.ps1`. On November 24, 2026, the operator confirmed successful deployment and public asset/manifest checks at `https://graymills-taskboard-outlook-test.vercel.app`. One-time Outlook installation and desktop acceptance testing remain pending. The script is restricted to the named new project and exact team, checks any existing folder link, and never patches the main TaskBoard or OAuth projects.
 
 From the Windows TaskBoard repository after fetching and switching to `feature/email-task-review`:
 

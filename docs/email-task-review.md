@@ -2,6 +2,8 @@
 
 Email-created tasks now go through a full-width review panel above Quick Add rather than silently taking quick-add defaults or occupying a narrow board-controls column. Notes use normal-weight text, file controls are secondary, and source-email details are collapsed until needed.
 
+Both task-entry panels start collapsed. Use **Show task form / Hide task form** for the email review, or **Add task / Hide quick add** for Quick Add. An incoming Outlook/ChatGPT review link opens its form automatically. Hiding the review preserves the draft but clears its final confirmation; reopening never creates a task.
+
 For the Outlook desktop entry point, see `outlook-addin/README.md`. That companion add-in reads the message selected in Outlook and opens this same review form in the browser; ChatGPT is not required for that path. The natural-language search path below remains available in ChatGPT. No mailbox search box is added to TaskBoard.
 
 ## Workflow

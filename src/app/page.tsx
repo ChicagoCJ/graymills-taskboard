@@ -1205,6 +1205,7 @@ export default function Home() {
   const [editTeamColor, setEditTeamColor] = useState("#2563EB");
 
   const [quickTaskTitle, setQuickTaskTitle] = useState("");
+  const [quickAddOpen, setQuickAddOpen] = useState(false);
   const [quickProjectId, setQuickProjectId] = useState("");
   const [quickProfileId, setQuickProfileId] = useState("");
   const [quickTeamId, setQuickTeamId] = useState("");
@@ -5371,13 +5372,12 @@ export default function Home() {
             />
           </div>
         <div className="grid items-start gap-3 xl:grid-cols-[minmax(0,2fr)_320px]">
-          <form
-            onSubmit={handleQuickAdd}
-            className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"
-          >
-            <label className="text-sm font-semibold text-slate-900">
-              Quick Add
-            </label>
+          <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <h2 className="text-sm font-semibold text-slate-900">Quick Add</h2>
+              <button type="button" aria-expanded={quickAddOpen} aria-controls="quick-add-fields" className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-800 hover:bg-slate-50" onClick={() => setQuickAddOpen(current => !current)}>{quickAddOpen ? "Hide quick add" : "Add task"}</button>
+            </div>
+          <form id="quick-add-fields" hidden={!quickAddOpen} onSubmit={handleQuickAdd}>
 
             <div className="mt-2 grid gap-3 lg:grid-cols-[2fr_1fr_1fr_1fr_auto]">
               <input
@@ -5446,6 +5446,7 @@ export default function Home() {
             )}
 
           </form>
+          </div>
 
 
 
