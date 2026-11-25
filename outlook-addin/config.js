@@ -1,2 +1,2 @@
-// Pilot destination: the TaskBoard review branch, not the OAuth/MCP services.
-export const TASKBOARD_URL = "https://graymills-taskboard-git-c2f63b-craig-shields-projects-275f9da6.vercel.app/";
+// Use the normal TaskBoard origin so an existing browser session can be reused.
+export const TASKBOARD_URL = "https://graymills-taskboard.vercel.app/";

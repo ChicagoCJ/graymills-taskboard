@@ -42,3 +42,7 @@ Natural-language Outlook search remains available in ChatGPT through its existin
 - https://learn.microsoft.com/en-us/office/dev/add-ins/testing/troubleshoot-manifest
 - https://learn.microsoft.com/en-us/javascript/api/outlook/office.messageread
 - https://learn.microsoft.com/en-us/javascript/api/office/office.ui
+
+## TaskBoard destination
+
+`config.js` uses `https://graymills-taskboard.vercel.app/` so the browser can reuse its normal TaskBoard session. The previously installed pilot points to the branch alias; its root temporarily redirects to the normal site and retains the email draft fragment. No manifest reinstall is required. A later static-host deployment picks up the direct destination. Different browser profiles and expired sessions still require ordinary sign-in.
