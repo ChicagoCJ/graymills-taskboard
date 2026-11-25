@@ -9,8 +9,10 @@ import {
   useDroppable,
 } from "@dnd-kit/core";
 import { supabase } from "@/lib/supabaseClient";
+import EmailTaskReview from "@/components/EmailTaskReview";
+import { emailTaskDescription, type ReviewedEmailTask } from "@/lib/emailTaskDraft";
 
-const APP_REVISION = "Version 3.15 — Create users from Admin";
+const APP_REVISION = "Version 3.15.1 — Reviewed email tasks";
 
 const statusColumns = [
   {
@@ -454,21 +456,6 @@ function formatFileSize(bytes: number | null) {
 
 function safeStorageName(fileName: string) {
   return fileName.replace(/[^a-zA-Z0-9.\-_]/g, "_");
-}
-
-function isEmailTaskFile(file: File) {
-  const lowerName = file.name.toLowerCase();
-  return lowerName.endsWith(".msg") || lowerName.endsWith(".eml");
-}
-
-function titleFromEmailFileName(fileName: string) {
-  return (
-    fileName
-      .replace(/\.(msg|eml)$/i, "")
-      .replace(/[_-]+/g, " ")
-      .replace(/\s+/g, " ")
-      .trim() || "Task from Outlook email"
-  );
 }
 
 function PriorityBadge({ priority }: { priority: string }) {
@@ -1218,6 +1205,7 @@ export default function Home() {
   const [editTeamColor, setEditTeamColor] = useState("#2563EB");
 
   const [quickTaskTitle, setQuickTaskTitle] = useState("");
+  const [quickAddOpen, setQuickAddOpen] = useState(false);
   const [quickProjectId, setQuickProjectId] = useState("");
   const [quickProfileId, setQuickProfileId] = useState("");
   const [quickTeamId, setQuickTeamId] = useState("");
@@ -1226,10 +1214,6 @@ export default function Home() {
     string | null
   >(null);
   const [quickAddMessage, setQuickAddMessage] = useState("");
-
-  const [emailTaskFile, setEmailTaskFile] = useState<File | null>(null);
-  const [creatingEmailTask, setCreatingEmailTask] = useState(false);
-  const [emailTaskMessage, setEmailTaskMessage] = useState("");
 
   const [movingTaskId, setMovingTaskId] = useState<string | null>(null);
 
@@ -3949,185 +3933,87 @@ export default function Home() {
     await refreshAllData();
   }
 
-  function handleEmailTaskFile(file: File | null) {
-    if (!file) {
-      setEmailTaskFile(null);
-      setEmailTaskMessage("");
-      return;
+  async function createReviewedEmailTask(
+    task: ReviewedEmailTask,
+    file: File | null,
+    requestId: string,
+  ): Promise<{ taskId: string; warning?: string }> {
+    if (!session?.user.id || !profile || accountInactive) {
+      throw new Error("Sign in with an active TaskBoard account first.");
+    }
+    if (!task.title.trim() || (!task.profileId && !task.teamId)) {
+      throw new Error("Enter a title and choose an owner or team.");
+    }
+    if ((task.projectId && !projects.some(p => p.id === task.projectId)) ||
+        (task.profileId && !profiles.some(p => p.id === task.profileId)) ||
+        (task.teamId && !teams.some(t => t.id === task.teamId))) {
+      throw new Error("A selected project, owner, or team is no longer available. Review the selections.");
+    }
+    const { error: taskError } = await supabase.from("tasks").insert({
+      id: requestId,
+      project_id: task.projectId || null,
+      created_by_profile_id: session.user.id,
+      title: task.title,
+      description: emailTaskDescription(task),
+      status: task.status,
+      priority: task.priority,
+      due_date: task.dueDate || null,
+      reminder_at: task.reminderAt ? reminderDateToIso(task.reminderAt) : null,
+      reminder_note: task.reminderNote.trim() || null,
+      completed_at: task.status === "done" ? new Date().toISOString() : null,
+      sort_order: boardTasks.filter(t => t.status === task.status).length * 10 + 100,
+    });
+    if (taskError) {
+      // A retry always uses the same UUID, including after an uncertain response.
+      // Never upsert: a repeated request must not overwrite the original task.
+      const { data: existing, error: lookupError } = await supabase.from("tasks")
+        .select("id").eq("id", requestId).maybeSingle();
+      if (existing) {
+        await loadBoardTasks();
+        return { taskId: requestId, warning: "This draft already created a task. Check its details, assignment, and attachments before continuing." };
+      }
+      throw new Error(lookupError
+        ? "Could not verify whether the task was created. Check TaskBoard before retrying this same draft."
+        : `Could not create email task: ${taskError.message}`);
     }
 
-    if (!isEmailTaskFile(file)) {
-      setEmailTaskFile(null);
-      setEmailTaskMessage(
-        "Please choose a saved Outlook email file ending in .msg or .eml.",
-      );
-      return;
-    }
-
-    setEmailTaskFile(file);
-    setEmailTaskMessage(`Selected email file: ${file.name}`);
-  }
-
-  function handleEmailTaskInput(event: React.ChangeEvent<HTMLInputElement>) {
-    handleEmailTaskFile(event.target.files?.[0] ?? null);
-    event.target.value = "";
-  }
-
-  function handleEmailTaskDrop(event: React.DragEvent<HTMLDivElement>) {
-    event.preventDefault();
-    handleEmailTaskFile(event.dataTransfer.files?.[0] ?? null);
-  }
-
-  async function createTaskFromEmailFile() {
-    if (!session?.user.id || !profile) {
-      setEmailTaskMessage(
-        "You must be signed in before creating a task from an email file.",
-      );
-      return;
-    }
-
-    if (!emailTaskFile) {
-      setEmailTaskMessage(
-        "Choose or drop a saved .msg or .eml email file first.",
-      );
-      return;
-    }
-
-    if (!isEmailTaskFile(emailTaskFile)) {
-      setEmailTaskMessage(
-        "Please choose a saved Outlook email file ending in .msg or .eml.",
-      );
-      return;
-    }
-
-    const selectedProfileId = quickProfileId || session.user.id;
-    const selectedTeamId = quickTeamId;
-
-    if (!selectedProfileId && !selectedTeamId) {
-      setEmailTaskMessage(
-        "Choose a person, a team, or both before creating the email task.",
-      );
-      return;
-    }
-
-    setCreatingEmailTask(true);
-    setEmailTaskMessage("");
-
+    const warnings: string[] = [];
     try {
-      const title = titleFromEmailFileName(emailTaskFile.name);
-      const nextSortOrder =
-        boardTasks.filter((task) => task.status === "backlog").length * 10 +
-        100;
-
-      const { data: newTask, error: taskError } = await supabase
-        .from("tasks")
-        .insert({
-          project_id: quickProjectId || null,
-          created_by_profile_id: session.user.id,
-          title,
-          description: `Created from saved Outlook email file: ${emailTaskFile.name}`,
-          status: "backlog",
-          priority: "normal",
-          sort_order: nextSortOrder,
-        })
-        .select("id")
-        .single();
-
-      if (taskError) {
-        setEmailTaskMessage(
-          `Could not create email task: ${taskError.message}`,
-        );
-        return;
+      const { error } = await supabase.from("task_assignees").insert({
+        task_id: requestId, profile_id: task.profileId || null, team_id: task.teamId || null,
+        assignment_type: buildAssignmentType(task.profileId, task.teamId),
+      });
+      if (error) warnings.push(`The assignment could not be saved: ${error.message}`);
+      if (file) {
+        const storagePath = `${session.user.id}/${requestId}/${Date.now()}-${safeStorageName(file.name)}`;
+        const { error: uploadError } = await supabase.storage.from("task-attachments")
+          .upload(storagePath, file, { cacheControl: "3600", upsert: false, contentType: file.type || "application/octet-stream" });
+        if (uploadError) warnings.push(`The email file could not be attached: ${uploadError.message}`);
+        else {
+          const { error: attachmentError } = await supabase.from("task_attachments").insert({
+            task_id: requestId, uploaded_by_profile_id: session.user.id,
+            file_name: file.name, file_path: storagePath,
+            file_type: file.type || null, file_size_bytes: file.size,
+          });
+          if (attachmentError) {
+            warnings.push(`The email attachment record could not be saved: ${attachmentError.message}`);
+            await supabase.storage.from("task-attachments").remove([storagePath]);
+          }
+        }
       }
-
-      const { error: assigneeError } = await supabase
-        .from("task_assignees")
-        .insert({
-          task_id: newTask.id,
-          profile_id: selectedProfileId || null,
-          team_id: selectedTeamId || null,
-          assignment_type: buildAssignmentType(
-            selectedProfileId,
-            selectedTeamId,
-          ),
-        });
-
-      if (assigneeError) {
-        setEmailTaskMessage(
-          `Task was created, but assignment failed: ${assigneeError.message}`,
-        );
-        await loadBoardTasks();
-        return;
-      }
-
-      const storagePath = `${session.user.id}/${newTask.id}/${Date.now()}-${safeStorageName(emailTaskFile.name)}`;
-
-      const { error: uploadError } = await supabase.storage
-        .from("task-attachments")
-        .upload(storagePath, emailTaskFile, {
-          cacheControl: "3600",
-          upsert: false,
-          contentType: emailTaskFile.type || "application/octet-stream",
-        });
-
-      if (uploadError) {
-        setEmailTaskMessage(
-          `Task was created, but the email file could not be attached: ${uploadError.message}`,
-        );
-        await loadBoardTasks();
-        return;
-      }
-
-      const { error: attachmentError } = await supabase
-        .from("task_attachments")
-        .insert({
-          task_id: newTask.id,
-          uploaded_by_profile_id: session.user.id,
-          file_name: emailTaskFile.name,
-          file_path: storagePath,
-          file_type: emailTaskFile.type || null,
-          file_size_bytes: emailTaskFile.size,
-        });
-
-      if (attachmentError) {
-        setEmailTaskMessage(
-          `Email file uploaded, but the attachment record failed: ${attachmentError.message}`,
-        );
-        await loadBoardTasks();
-        return;
-      }
-
-      await logTaskActivity(
-        newTask.id,
-        "created_from_email",
-        `Created task from email file: ${emailTaskFile.name}.`,
-        {
-          file_name: emailTaskFile.name,
-          file_size_bytes: emailTaskFile.size,
-          project_id: quickProjectId || null,
-          profile_ids: [selectedProfileId].filter(Boolean),
-          team_ids: [selectedTeamId].filter(Boolean),
-        },
-      );
-
-      await logTaskActivity(
-        newTask.id,
-        "attachment_added",
-        `Attached original email file: ${emailTaskFile.name}.`,
-        {
-          file_name: emailTaskFile.name,
-          file_size_bytes: emailTaskFile.size,
-        },
-      );
-
-      setEmailTaskFile(null);
-      setEmailTaskMessage(
-        "Email task created and original email file attached.",
-      );
-      await loadBoardTasks();
-    } finally {
-      setCreatingEmailTask(false);
+      const { error: activityError } = await supabase.from("activity_log").insert({
+        task_id: requestId, profile_id: session.user.id,
+        activity_type: "created_from_email",
+        activity_text: `Created reviewed email task: ${task.title}.`,
+        metadata: { project_id: task.projectId || null, status: task.status, priority: task.priority,
+          due_date: task.dueDate || null, source_subject: task.source.subject },
+      });
+      if (activityError) warnings.push("The task was saved, but its activity entry could not be recorded.");
+    } catch {
+      warnings.push("The task was saved, but assignment or attachment processing was interrupted.");
     }
+    await loadBoardTasks();
+    return { taskId: requestId, warning: warnings.length ? warnings.join(" ") : undefined };
   }
 
   function getColumnTaskContext(column: DisplayColumn) {
@@ -5477,14 +5363,21 @@ export default function Home() {
       )}
 
       <section className="mx-auto max-w-[1600px] px-4 py-4 sm:px-6">
-        <div className="grid gap-3 xl:grid-cols-[minmax(0,2fr)_320px]">
-          <form
-            onSubmit={handleQuickAdd}
-            className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"
-          >
-            <label className="text-sm font-semibold text-slate-900">
-              Quick Add
-            </label>
+        <div className="mb-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+            <EmailTaskReview
+              projects={projects.map(project => ({ id: project.id, name: project.name }))}
+              people={profiles.map(person => ({ id: person.id, name: person.full_name && person.email ? `${person.full_name} (${person.email})` : person.full_name || person.email || "Unnamed person" }))}
+              teams={teams.map(team => ({ id: team.id, name: team.name }))}
+              onCreate={createReviewedEmailTask}
+            />
+          </div>
+        <div className="grid items-start gap-3 xl:grid-cols-[minmax(0,2fr)_320px]">
+          <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <h2 className="text-sm font-semibold text-slate-900">Quick Add</h2>
+              <button type="button" aria-expanded={quickAddOpen} aria-controls="quick-add-fields" className="rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-800 hover:bg-slate-50" onClick={() => setQuickAddOpen(current => !current)}>{quickAddOpen ? "Hide quick add" : "Add task"}</button>
+            </div>
+          <form id="quick-add-fields" hidden={!quickAddOpen} onSubmit={handleQuickAdd}>
 
             <div className="mt-2 grid gap-3 lg:grid-cols-[2fr_1fr_1fr_1fr_auto]">
               <input
@@ -5552,54 +5445,10 @@ export default function Home() {
               </div>
             )}
 
-            <div className="mt-4 rounded-2xl border border-dashed border-slate-300 bg-slate-50 p-4">
-              <div
-                onDragOver={(event) => event.preventDefault()}
-                onDrop={handleEmailTaskDrop}
-                className="rounded-xl border border-dashed border-slate-300 bg-white p-4 text-sm text-slate-700"
-              >
-                <p className="font-semibold text-slate-900">
-                  Create task from Outlook email
-                </p>
-                <p className="mt-1 text-xs text-slate-500">
-                  Drag a saved .msg or .eml email file here, or choose one
-                  below. The app creates a Backlog task and attaches the
-                  original email file.
-                </p>
-
-                <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center">
-                  <label className="cursor-pointer rounded-xl border border-slate-300 bg-white px-4 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50">
-                    Choose Email File
-                    <input
-                      type="file"
-                      accept=".msg,.eml,message/rfc822,application/vnd.ms-outlook"
-                      className="hidden"
-                      onChange={handleEmailTaskInput}
-                    />
-                  </label>
-                  <button
-                    type="button"
-                    onClick={createTaskFromEmailFile}
-                    disabled={creatingEmailTask}
-                    className="rounded-xl bg-slate-950 px-4 py-2 text-xs font-semibold text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:bg-slate-400"
-                  >
-                    {creatingEmailTask ? "Creating..." : "Create Email Task"}
-                  </button>
-                  {emailTaskFile && (
-                    <span className="text-xs text-slate-600">
-                      Selected: {emailTaskFile.name}
-                    </span>
-                  )}
-                </div>
-              </div>
-
-              {emailTaskMessage && (
-                <div className="mt-3 rounded-xl border border-slate-200 bg-white p-3 text-sm text-slate-700">
-                  {emailTaskMessage}
-                </div>
-              )}
-            </div>
           </form>
+          </div>
+
+
 
           <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
             <h2 className="text-sm font-semibold text-slate-900">
